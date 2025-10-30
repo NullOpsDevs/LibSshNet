@@ -60,6 +60,13 @@ mkdir -p "$OUTPUT_DIR"
 echo "=== After mkdir -p ==="
 ls -ld "$OUTPUT_DIR"
 
-# Copy the dylib
+# Copy the dylib (find the actual versioned file, not the symlinks)
 echo "=== Copying dylib ==="
-cp -v src/libssh2*.dylib "$OUTPUT_DIR/libssh2.dylib"
+# Find the actual .dylib file (not symlinks)
+DYLIB_FILE=$(find src -name "libssh2.*.*.*.dylib" -type f | head -n 1)
+if [ -n "$DYLIB_FILE" ]; then
+  cp -v "$DYLIB_FILE" "$OUTPUT_DIR/libssh2.dylib"
+else
+  echo "Error: Could not find libssh2 dylib file"
+  exit 1
+fi
