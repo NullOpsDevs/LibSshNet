@@ -9,73 +9,29 @@ on:
       - '.github/workflows/build-native.yml'
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        arch: [x64, x86]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
-
-      - name: Install OpenSSL and zlib
-        run: |
-          vcpkg install openssl:${{ matrix.arch }}-windows zlib:${{ matrix.arch }}-windows
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Build libssh2
-        shell: powershell
-        run: |
-          $arch = "${{ matrix.arch }}"
-          $archCMake = if ($arch -eq "x64") { "x64" } else { "Win32" }
-
-          cd Native/libssh2
-          mkdir build-$arch
-          cd build-$arch
-
-          cmake .. `
-            -G "Visual Studio 17 2022" `
-            -A $archCMake `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DBUILD_SHARED_LIBS=ON `
-            -DENABLE_ZLIB_COMPRESSION=ON `
-            -DCRYPTO_BACKEND=OpenSSL `
-            -DBUILD_EXAMPLES=OFF `
-            -DBUILD_TESTING=OFF `
-            -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-
-          cmake --build . --config Release
-
-          # Create output directory
-          $outDir = "../../../NullOpsDevs.LibSsh/runtimes/win-$arch/native"
-          mkdir -Force $outDir
-
-          # Copy the DLL
-          Copy-Item "src/Release/libssh2.dll" $outDir
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: libssh2-win-${{ matrix.arch }}
-          path: NullOpsDevs.LibSsh/runtimes/win-${{ matrix.arch }}/native/
-
-  build-linux:
+  build-all:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - arch: x64
-            platform: linux/amd64
-          - arch: arm64
-            platform: linux/arm64
+          - platform: win-x64
+            dockerfile_platform: linux/amd64
+            target_triple: x86_64-w64-mingw32
+          - platform: win-x86
+            dockerfile_platform: linux/amd64
+            target_triple: i686-w64-mingw32
+          - platform: linux-x64
+            dockerfile_platform: linux/amd64
+            target_triple: x86_64-linux-gnu
+          - platform: linux-arm64
+            dockerfile_platform: linux/arm64
+            target_triple: aarch64-linux-gnu
+          - platform: osx-x64
+            dockerfile_platform: linux/amd64
+            target_triple: x86_64-apple-darwin
+          - platform: osx-arm64
+            dockerfile_platform: linux/amd64
+            target_triple: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,11 +45,121 @@ jobs:
 
       - name: Build libssh2
         run: |
-          docker buildx build \
-            --platform ${{ matrix.platform }} \
-            --build-arg TARGETARCH=${{ matrix.arch }} \
-            --output type=local,dest=./output \
-            -f - . <<'EOF'
+          mkdir -p output
+
+          # Determine build configuration based on platform
+          PLATFORM="${{ matrix.platform }}"
+          TARGET_TRIPLE="${{ matrix.target_triple }}"
+
+          if [[ "$PLATFORM" == win-* ]]; then
+            # Windows build using MinGW
+            docker buildx build \
+              --platform ${{ matrix.dockerfile_platform }} \
+              --build-arg TARGET_TRIPLE=$TARGET_TRIPLE \
+              --output type=local,dest=./output \
+              -f - . <<'EOF'
+          FROM debian:bookworm-slim
+          ARG TARGET_TRIPLE
+
+          RUN apt-get update && apt-get install -y \
+              build-essential \
+              cmake \
+              mingw-w64 \
+              wget \
+              && rm -rf /var/lib/apt/lists/*
+
+          # Download and build OpenSSL for Windows
+          WORKDIR /build
+          RUN wget https://www.openssl.org/source/openssl-3.0.15.tar.gz && \
+              tar xzf openssl-3.0.15.tar.gz && \
+              cd openssl-3.0.15 && \
+              ./Configure mingw64 --cross-compile-prefix=${TARGET_TRIPLE}- --prefix=/opt/openssl-${TARGET_TRIPLE} && \
+              make -j$(nproc) && \
+              make install_sw
+
+          # Build libssh2
+          COPY Native/libssh2 /src/libssh2
+          WORKDIR /src/libssh2/build
+
+          RUN cmake .. \
+              -DCMAKE_SYSTEM_NAME=Windows \
+              -DCMAKE_C_COMPILER=${TARGET_TRIPLE}-gcc \
+              -DCMAKE_RC_COMPILER=${TARGET_TRIPLE}-windres \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DENABLE_ZLIB_COMPRESSION=OFF \
+              -DCRYPTO_BACKEND=OpenSSL \
+              -DOPENSSL_ROOT_DIR=/opt/openssl-${TARGET_TRIPLE} \
+              -DBUILD_EXAMPLES=OFF \
+              -DBUILD_TESTING=OFF && \
+              cmake --build . --config Release -j$(nproc) && \
+              mkdir -p /output && \
+              cp src/libssh2.dll /output/ || cp src/libssh2-*.dll /output/libssh2.dll
+
+          FROM scratch
+          COPY --from=0 /output/* /
+          EOF
+
+          elif [[ "$PLATFORM" == osx-* ]]; then
+            # macOS build using osxcross
+            docker buildx build \
+              --platform ${{ matrix.dockerfile_platform }} \
+              --build-arg TARGET_TRIPLE=$TARGET_TRIPLE \
+              --output type=local,dest=./output \
+              -f - . <<'EOF'
+          FROM debian:bookworm-slim
+          ARG TARGET_TRIPLE
+
+          RUN apt-get update && apt-get install -y \
+              build-essential \
+              cmake \
+              git \
+              wget \
+              clang \
+              libssl-dev \
+              libxml2-dev \
+              llvm-dev \
+              uuid-dev \
+              && rm -rf /var/lib/apt/lists/*
+
+          # Install osxcross
+          WORKDIR /opt
+          RUN git clone https://github.com/tpoechtrager/osxcross.git && \
+              cd osxcross && \
+              wget -nc https://github.com/joseluisq/macosx-sdks/releases/download/12.3/MacOSX12.3.sdk.tar.xz && \
+              mv MacOSX12.3.sdk.tar.xz tarballs/ && \
+              UNATTENDED=1 ./build.sh
+
+          ENV PATH="/opt/osxcross/target/bin:$PATH"
+
+          # Build libssh2
+          COPY Native/libssh2 /src/libssh2
+          WORKDIR /src/libssh2/build
+
+          RUN cmake .. \
+              -DCMAKE_SYSTEM_NAME=Darwin \
+              -DCMAKE_C_COMPILER=${TARGET_TRIPLE}-clang \
+              -DCMAKE_CXX_COMPILER=${TARGET_TRIPLE}-clang++ \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DENABLE_ZLIB_COMPRESSION=ON \
+              -DCRYPTO_BACKEND=OpenSSL \
+              -DBUILD_EXAMPLES=OFF \
+              -DBUILD_TESTING=OFF && \
+              cmake --build . --config Release -j$(nproc) && \
+              mkdir -p /output && \
+              cp src/libssh2*.dylib /output/libssh2.dylib
+
+          FROM scratch
+          COPY --from=0 /output/* /
+          EOF
+
+          else
+            # Linux build
+            docker buildx build \
+              --platform ${{ matrix.dockerfile_platform }} \
+              --output type=local,dest=./output \
+              -f - . <<'EOF'
           FROM debian:bookworm-slim
 
           RUN apt-get update && apt-get install -y \
@@ -104,93 +170,50 @@ jobs:
               && rm -rf /var/lib/apt/lists/*
 
           COPY Native/libssh2 /src/libssh2
-          WORKDIR /src/libssh2
+          WORKDIR /src/libssh2/build
 
-          RUN mkdir build && cd build && \
-              cmake .. \
-                  -DCMAKE_BUILD_TYPE=Release \
-                  -DBUILD_SHARED_LIBS=ON \
-                  -DENABLE_ZLIB_COMPRESSION=ON \
-                  -DCRYPTO_BACKEND=OpenSSL \
-                  -DBUILD_EXAMPLES=OFF \
-                  -DBUILD_TESTING=OFF && \
-              cmake --build . --config Release && \
+          RUN cmake .. \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DENABLE_ZLIB_COMPRESSION=ON \
+              -DCRYPTO_BACKEND=OpenSSL \
+              -DBUILD_EXAMPLES=OFF \
+              -DBUILD_TESTING=OFF && \
+              cmake --build . --config Release -j$(nproc) && \
               mkdir -p /output && \
               cp src/libssh2.so* /output/
 
           FROM scratch
           COPY --from=0 /output/* /
           EOF
-
-          # Create output directory
-          mkdir -p NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native
-
-          # Copy and rename library (remove version suffix)
-          cp output/libssh2.so* NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native/libssh2.so
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: libssh2-linux-${{ matrix.arch }}
-          path: NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native/
-
-  build-macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - arch: x64
-            target: x86_64-apple-darwin
-          - arch: arm64
-            target: arm64-apple-darwin
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          brew install cmake openssl zlib
-
-      - name: Build libssh2
-        run: |
-          cd Native/libssh2
-          mkdir build-${{ matrix.arch }}
-          cd build-${{ matrix.arch }}
-
-          # Set architecture-specific flags
-          if [ "${{ matrix.arch }}" = "x64" ]; then
-            ARCH_FLAGS="-arch x86_64"
-          else
-            ARCH_FLAGS="-arch arm64"
           fi
 
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=ON \
-            -DENABLE_ZLIB_COMPRESSION=ON \
-            -DCRYPTO_BACKEND=OpenSSL \
-            -DBUILD_EXAMPLES=OFF \
-            -DBUILD_TESTING=OFF \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }} \
-            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+          # Create runtime directory structure
+          mkdir -p NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native
 
-          cmake --build . --config Release
-
-          # Create output directory
-          mkdir -p ../../../NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native
-
-          # Copy the dylib
-          cp src/libssh2*.dylib ../../../NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native/libssh2.dylib
+          # Copy library to correct location
+          if [[ "$PLATFORM" == win-* ]]; then
+            cp output/libssh2.dll NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
+          elif [[ "$PLATFORM" == osx-* ]]; then
+            cp output/libssh2.dylib NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
+          else
+            # Copy and create symlink without version suffix
+            cp output/libssh2.so* NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
+            # Find the actual .so file and create a symlink
+            cd NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
+            if [ -f libssh2.so.1 ]; then
+              ln -sf libssh2.so.1 libssh2.so
+            fi
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: libssh2-osx-${{ matrix.arch }}
-          path: NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native/
+          name: libssh2-${{ matrix.platform }}
+          path: NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
 
   package:
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-all]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -213,6 +236,7 @@ jobs:
           done
 
           # List what we have
+          echo "Built native libraries:"
           find NullOpsDevs.LibSsh/runtimes -type f
 
       - name: Setup .NET
