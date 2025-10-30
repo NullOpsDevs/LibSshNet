@@ -2,6 +2,7 @@ FROM crazymax/osxcross:latest-ubuntu AS builder
 ARG TARGET_TRIPLE
 
 # Install additional dependencies
+SHELL ["/bin/bash", "-c"]
 RUN apt-get update && apt-get install -y \
     cmake \
     wget \
