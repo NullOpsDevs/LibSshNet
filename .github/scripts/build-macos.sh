@@ -47,8 +47,9 @@ cmake .. \
 
 cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
-# Create output directory
-mkdir -p "../../../NullOpsDevs.LibSsh/runtimes/$PLATFORM/native"
+# Create output directory using absolute path
+OUTPUT_DIR="$GITHUB_WORKSPACE/NullOpsDevs.LibSsh/runtimes/$PLATFORM/native"
+mkdir -p "$OUTPUT_DIR"
 
 # Copy the dylib
-cp src/libssh2*.dylib "../../../NullOpsDevs.LibSsh/runtimes/$PLATFORM/native/libssh2.dylib"
+cp src/libssh2*.dylib "$OUTPUT_DIR/libssh2.dylib"
