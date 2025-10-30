@@ -1,0 +1,238 @@
+name: Build Native Libraries
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Native/libssh2/**'
+      - '.github/workflows/build-native.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
+
+      - name: Install OpenSSL and zlib
+        run: |
+          vcpkg install openssl:${{ matrix.arch }}-windows zlib:${{ matrix.arch }}-windows
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build libssh2
+        shell: powershell
+        run: |
+          $arch = "${{ matrix.arch }}"
+          $archCMake = if ($arch -eq "x64") { "x64" } else { "Win32" }
+
+          cd Native/libssh2
+          mkdir build-$arch
+          cd build-$arch
+
+          cmake .. `
+            -G "Visual Studio 17 2022" `
+            -A $archCMake `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=ON `
+            -DENABLE_ZLIB_COMPRESSION=ON `
+            -DCRYPTO_BACKEND=OpenSSL `
+            -DBUILD_EXAMPLES=OFF `
+            -DBUILD_TESTING=OFF `
+            -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+
+          cmake --build . --config Release
+
+          # Create output directory
+          $outDir = "../../../NullOpsDevs.LibSsh/runtimes/win-$arch/native"
+          mkdir -Force $outDir
+
+          # Copy the DLL
+          Copy-Item "src/Release/libssh2.dll" $outDir
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libssh2-win-${{ matrix.arch }}
+          path: NullOpsDevs.LibSsh/runtimes/win-${{ matrix.arch }}/native/
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build libssh2
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --build-arg TARGETARCH=${{ matrix.arch }} \
+            --output type=local,dest=./output \
+            -f - . <<'EOF'
+          FROM debian:bookworm-slim
+
+          RUN apt-get update && apt-get install -y \
+              build-essential \
+              cmake \
+              libssl-dev \
+              zlib1g-dev \
+              && rm -rf /var/lib/apt/lists/*
+
+          COPY Native/libssh2 /src/libssh2
+          WORKDIR /src/libssh2
+
+          RUN mkdir build && cd build && \
+              cmake .. \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DBUILD_SHARED_LIBS=ON \
+                  -DENABLE_ZLIB_COMPRESSION=ON \
+                  -DCRYPTO_BACKEND=OpenSSL \
+                  -DBUILD_EXAMPLES=OFF \
+                  -DBUILD_TESTING=OFF && \
+              cmake --build . --config Release && \
+              mkdir -p /output && \
+              cp src/libssh2.so* /output/
+
+          FROM scratch
+          COPY --from=0 /output/* /
+          EOF
+
+          # Create output directory
+          mkdir -p NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native
+
+          # Copy and rename library (remove version suffix)
+          cp output/libssh2.so* NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native/libssh2.so
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libssh2-linux-${{ matrix.arch }}
+          path: NullOpsDevs.LibSsh/runtimes/linux-${{ matrix.arch }}/native/
+
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-apple-darwin
+          - arch: arm64
+            target: arm64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install cmake openssl zlib
+
+      - name: Build libssh2
+        run: |
+          cd Native/libssh2
+          mkdir build-${{ matrix.arch }}
+          cd build-${{ matrix.arch }}
+
+          # Set architecture-specific flags
+          if [ "${{ matrix.arch }}" = "x64" ]; then
+            ARCH_FLAGS="-arch x86_64"
+          else
+            ARCH_FLAGS="-arch arm64"
+          fi
+
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            -DENABLE_ZLIB_COMPRESSION=ON \
+            -DCRYPTO_BACKEND=OpenSSL \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch == 'x64' && 'x86_64' || 'arm64' }} \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl)
+
+          cmake --build . --config Release
+
+          # Create output directory
+          mkdir -p ../../../NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native
+
+          # Copy the dylib
+          cp src/libssh2*.dylib ../../../NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native/libssh2.dylib
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libssh2-osx-${{ matrix.arch }}
+          path: NullOpsDevs.LibSsh/runtimes/osx-${{ matrix.arch }}/native/
+
+  package:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize native libraries
+        run: |
+          mkdir -p NullOpsDevs.LibSsh/runtimes
+
+          # Copy all native libraries to the correct runtime folders
+          for artifact in artifacts/libssh2-*; do
+            platform=$(basename $artifact | sed 's/libssh2-//')
+            echo "Processing $platform..."
+            mkdir -p NullOpsDevs.LibSsh/runtimes/$platform/native
+            cp -r $artifact/* NullOpsDevs.LibSsh/runtimes/$platform/native/ || true
+          done
+
+          # List what we have
+          find NullOpsDevs.LibSsh/runtimes -type f
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Build and Pack NuGet
+        run: |
+          dotnet build NullOpsDevs.LibSsh/NullOpsDevs.LibSsh.csproj -c Release
+          dotnet pack NullOpsDevs.LibSsh/NullOpsDevs.LibSsh.csproj -c Release -o ./artifacts/nuget
+
+      - name: Upload NuGet package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: artifacts/nuget/*.nupkg
+
+      - name: Upload native libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libraries-all
+          path: NullOpsDevs.LibSsh/runtimes/

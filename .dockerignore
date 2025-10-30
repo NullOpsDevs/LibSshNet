@@ -1,0 +1,6 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.git/
+**/node_modules/
+ssh-server-config/

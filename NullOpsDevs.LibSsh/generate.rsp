@@ -1,0 +1,51 @@
+# Base directory
+--file-directory
+../Native/libssh2
+
+# Input headers
+--file
+include/libssh2.h
+--file
+include/libssh2_publickey.h
+--file
+include/libssh2_sftp.h
+
+# Output options
+--output
+Generated
+
+--namespace
+NullOpsDevs.LibSsh.Generated
+
+--libraryPath
+libssh2
+
+# Language (c or c++)
+--language
+c
+
+# Configuration options
+--config
+multi-file
+--config
+latest-codegen
+--config
+generate-macro-bindings
+--config
+generate-file-scoped-namespaces
+--config
+generate-helper-types
+
+# Platform-specific defines for Windows
+--define-macro
+_WIN32
+--define-macro
+WIN32
+
+# Method prefixes to exclude from generation (private/internal functions)
+--exclude
+_libssh2_
+
+# Method class name for static P/Invoke methods
+--methodClassName
+LibSSH2
