@@ -11,7 +11,7 @@ on:
       - '.github/scripts/**'
 
 jobs:
-  build-all:
+  build-linux-windows:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -26,12 +26,6 @@ jobs:
           - platform: linux-arm64
             dockerfile_platform: linux/arm64
             target_triple: aarch64-linux-gnu
-          - platform: osx-x64
-            dockerfile_platform: linux/amd64
-            target_triple: x86_64-apple-darwin
-          - platform: osx-arm64
-            dockerfile_platform: linux/amd64
-            target_triple: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,8 +48,34 @@ jobs:
           name: libssh2-${{ matrix.platform }}
           path: NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
 
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: osx-x64
+            arch: x86_64
+          - platform: osx-arm64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build libssh2 for macOS
+        run: |
+          chmod +x .github/scripts/build-macos.sh
+          .github/scripts/build-macos.sh "${{ matrix.platform }}" "${{ matrix.arch }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libssh2-${{ matrix.platform }}
+          path: NullOpsDevs.LibSsh/runtimes/${{ matrix.platform }}/native/
+
   package:
-    needs: [build-all]
+    needs: [build-linux-windows, build-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
