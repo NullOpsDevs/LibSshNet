@@ -47,25 +47,14 @@ cmake .. \
 
 cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
-# Debug: list what was built
-echo "=== Contents of src directory ==="
-ls -lR src/
-
 # Create output directory using absolute path
 OUTPUT_DIR="$GITHUB_WORKSPACE/NullOpsDevs.LibSsh/runtimes/$PLATFORM/native"
-echo "=== Output directory: $OUTPUT_DIR ==="
-echo "=== Checking if output dir exists ==="
-ls -ld "$GITHUB_WORKSPACE/NullOpsDevs.LibSsh/runtimes/$PLATFORM" || echo "Parent dir doesn't exist"
 mkdir -p "$OUTPUT_DIR"
-echo "=== After mkdir -p ==="
-ls -ld "$OUTPUT_DIR"
 
 # Copy the dylib (find the actual versioned file, not the symlinks)
-echo "=== Copying dylib ==="
-# Find the actual .dylib file (not symlinks)
 DYLIB_FILE=$(find src -name "libssh2.*.*.*.dylib" -type f | head -n 1)
 if [ -n "$DYLIB_FILE" ]; then
-  cp -v "$DYLIB_FILE" "$OUTPUT_DIR/libssh2.dylib"
+  cp "$DYLIB_FILE" "$OUTPUT_DIR/libssh2.dylib"
 else
   echo "Error: Could not find libssh2 dylib file"
   exit 1
