@@ -47,9 +47,19 @@ cmake .. \
 
 cmake --build . --config Release -j$(sysctl -n hw.ncpu)
 
+# Debug: list what was built
+echo "=== Contents of src directory ==="
+ls -lR src/
+
 # Create output directory using absolute path
 OUTPUT_DIR="$GITHUB_WORKSPACE/NullOpsDevs.LibSsh/runtimes/$PLATFORM/native"
+echo "=== Output directory: $OUTPUT_DIR ==="
+echo "=== Checking if output dir exists ==="
+ls -ld "$GITHUB_WORKSPACE/NullOpsDevs.LibSsh/runtimes/$PLATFORM" || echo "Parent dir doesn't exist"
 mkdir -p "$OUTPUT_DIR"
+echo "=== After mkdir -p ==="
+ls -ld "$OUTPUT_DIR"
 
 # Copy the dylib
-cp src/libssh2*.dylib "$OUTPUT_DIR/libssh2.dylib"
+echo "=== Copying dylib ==="
+cp -v src/libssh2*.dylib "$OUTPUT_DIR/libssh2.dylib"
