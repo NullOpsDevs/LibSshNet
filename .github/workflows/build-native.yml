@@ -12,6 +12,7 @@ jobs:
   build-all:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: win-x64
@@ -120,6 +121,8 @@ jobs:
               libxml2-dev \
               llvm-dev \
               uuid-dev \
+              zlib1g-dev \
+              libbz2-dev \
               && rm -rf /var/lib/apt/lists/*
 
           # Install osxcross
