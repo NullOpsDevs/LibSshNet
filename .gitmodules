@@ -1,3 +1,0 @@
-[submodule "Native/libssh2"]
-	path = Native/libssh2
-	url = https://github.com/libssh2/libssh2.git

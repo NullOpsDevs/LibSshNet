@@ -11,17 +11,36 @@ public static class Program
     private const string Username = "user";
     private const string Password = "12345";
 
-    public static unsafe void Main(string[] args)
+    public static unsafe int Main()
     {
+        if (!NativePreloader.Preload())
+            return 255;
+
+        LibSsh2.GlobalLogger = Console.WriteLine;
+        
+        var sshConnection = new SshSession();
+        sshConnection.Connect(Host, Port);
+        sshConnection.Authenticate(SshCredential.FromPassword("user", "12345"));
+        
+        Console.WriteLine("Connected!");
+
+        var result = sshConnection.ExecuteCommand("echo $SHELL");
+        
+        Console.WriteLine($"Successful -> {result.Successful}");
+        Console.WriteLine($"Stdout -> {result.Stdout}");
+        Console.WriteLine($"Stderr -> {result.Stderr}");
+        
+        return 0;
+        
         Console.WriteLine("LibSSH2 .NET Bindings Test");
         Console.WriteLine("==========================\n");
 
         // Initialize libssh2
-        int rc = LibSSH2.libssh2_init(0);
+        int rc = LibSshNative.libssh2_init(0);
         if (rc != 0)
         {
             Console.WriteLine($"Failed to initialize libssh2: {rc}");
-            return;
+            return 255;
         }
 
         Console.WriteLine("libssh2 initialized successfully");
@@ -29,11 +48,11 @@ public static class Program
         try
         {
             // Create session
-            _LIBSSH2_SESSION* session = LibSSH2.libssh2_session_init_ex(null, null, null, null);
+            _LIBSSH2_SESSION* session = LibSshNative.libssh2_session_init_ex(null, null, null, null);
             if (session == null)
             {
                 Console.WriteLine("Failed to create session");
-                return;
+                return 255;
             }
 
             Console.WriteLine("Session created");
@@ -44,20 +63,20 @@ public static class Program
             if (socket == null)
             {
                 Console.WriteLine("Failed to connect socket");
-                LibSSH2.libssh2_session_free(session);
-                return;
+                LibSshNative.libssh2_session_free(session);
+                return 255;
             }
 
             Console.WriteLine("Socket connected");
 
             // Start SSH handshake
-            rc = LibSSH2.libssh2_session_handshake(session, (ulong) socket.Handle);
+            rc = LibSshNative.libssh2_session_handshake(session, (ulong) socket.Handle);
             if (rc != 0)
             {
                 Console.WriteLine($"SSH handshake failed: {rc}");
                 socket.Close();
-                LibSSH2.libssh2_session_free(session);
-                return;
+                LibSshNative.libssh2_session_free(session);
+                return 255;
             }
 
             Console.WriteLine("SSH handshake completed");
@@ -67,7 +86,7 @@ public static class Program
             fixed (byte* userBytes = Encoding.UTF8.GetBytes(Username))
             fixed (byte* passBytes = Encoding.UTF8.GetBytes(Password))
             {
-                rc = LibSSH2.libssh2_userauth_password_ex(
+                rc = LibSshNative.libssh2_userauth_password_ex(
                     session,
                     (sbyte*)userBytes,
                     (uint)Username.Length,
@@ -81,8 +100,8 @@ public static class Program
             {
                 Console.WriteLine($"Authentication failed: {rc}");
                 socket.Close();
-                LibSSH2.libssh2_session_free(session);
-                return;
+                LibSshNative.libssh2_session_free(session);
+                return 255;
             }
 
             Console.WriteLine("Authentication successful!\n");
@@ -94,21 +113,23 @@ public static class Program
 
             // Cleanup
             Console.WriteLine("\nDisconnecting...");
-            LibSSH2.libssh2_session_disconnect_ex(
+            LibSshNative.libssh2_session_disconnect_ex(
                 session,
                 0x000B,
                 (sbyte*)Marshal.StringToHGlobalAnsi("Normal Shutdown"),
                 (sbyte*)null
             );
 
-            LibSSH2.libssh2_session_free(session);
+            LibSshNative.libssh2_session_free(session);
             socket.Close();
         }
         finally
         {
-            LibSSH2.libssh2_exit();
+            LibSshNative.libssh2_exit();
             Console.WriteLine("libssh2 cleaned up");
         }
+
+        return 0;
     }
 
     private static unsafe void ExecuteCommand(_LIBSSH2_SESSION* session, string command)
@@ -117,7 +138,7 @@ public static class Program
         Console.WriteLine(new string('-', 50));
 
         // Open channel
-        _LIBSSH2_CHANNEL* channel = LibSSH2.libssh2_channel_open_ex(
+        var channel = LibSshNative.libssh2_channel_open_ex(
             session,
             (sbyte*)Marshal.StringToHGlobalAnsi("session"),
             7,
@@ -136,7 +157,7 @@ public static class Program
         // Execute command
         fixed (byte* cmdBytes = Encoding.UTF8.GetBytes(command))
         {
-            int rc = LibSSH2.libssh2_channel_process_startup(
+            int rc = LibSshNative.libssh2_channel_process_startup(
                 channel,
                 (sbyte*)Marshal.StringToHGlobalAnsi("exec"),
                 4,
@@ -147,7 +168,7 @@ public static class Program
             if (rc != 0)
             {
                 Console.WriteLine($"Failed to execute command: {rc}");
-                LibSSH2.libssh2_channel_free(channel);
+                LibSshNative.libssh2_channel_free(channel);
                 return;
             }
         }
@@ -158,7 +179,7 @@ public static class Program
         {
             fixed (byte* bufPtr = buffer)
             {
-                long bytesRead = LibSSH2.libssh2_channel_read_ex(channel, 0, (sbyte*)bufPtr, (nuint)buffer.Length);
+                long bytesRead = LibSshNative.libssh2_channel_read_ex(channel, 0, (sbyte*)bufPtr, (nuint)buffer.Length);
 
                 if (bytesRead > 0)
                 {
@@ -169,7 +190,7 @@ public static class Program
                 {
                     break;
                 }
-                else if (bytesRead == LibSSH2.LIBSSH2_ERROR_EAGAIN)
+                else if (bytesRead == LibSshNative.LIBSSH2_ERROR_EAGAIN)
                 {
                     Thread.Sleep(10);
                     continue;
@@ -183,9 +204,9 @@ public static class Program
         }
 
         // Close channel
-        LibSSH2.libssh2_channel_close(channel);
-        LibSSH2.libssh2_channel_wait_closed(channel);
-        LibSSH2.libssh2_channel_free(channel);
+        LibSshNative.libssh2_channel_close(channel);
+        LibSshNative.libssh2_channel_wait_closed(channel);
+        LibSshNative.libssh2_channel_free(channel);
     }
 
     private static System.Net.Sockets.Socket? ConnectSocket(string host, int port)

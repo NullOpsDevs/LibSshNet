@@ -13,8 +13,8 @@
         <Description>.NET bindings for libssh2 with native libraries included for Windows, Linux, and macOS</Description>
         <PackageTags>ssh;libssh2;sftp;scp;ssh2;native;interop</PackageTags>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <RepositoryUrl>https://github.com/nullopsdevs/libssh</RepositoryUrl>
-        <PackageProjectUrl>https://github.com/nullopsdevs/libssh</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/NullOpsDevs/LibSshNet</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/NullOpsDevs/LibSshNet</PackageProjectUrl>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -23,46 +23,62 @@
     <!-- Include native libraries for different platforms -->
     <ItemGroup>
         <!-- Windows x64 -->
-        <Content Include="runtimes\win-x64\native\libssh2.dll" Condition="Exists('runtimes\win-x64\native\libssh2.dll')">
+        <Content Include="native\libssh2-win-x64\libssh2.dll" Condition="Exists('native\libssh2-win-x64\libssh2.dll')">
             <PackagePath>runtimes/win-x64/native/libssh2.dll</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
 
-        <!-- Windows x86 -->
-        <Content Include="runtimes\win-x86\native\libssh2.dll" Condition="Exists('runtimes\win-x86\native\libssh2.dll')">
-            <PackagePath>runtimes/win-x86/native/libssh2.dll</PackagePath>
+        <!-- Linux x64 -->
+        <Content Include="native\libssh2-linux-x64\libssh2.so.1.0.1" Condition="Exists('native\libssh2-linux-x64\libssh2.so.1.0.1')">
+            <PackagePath>runtimes/linux-x64/native/libssh2.so.1.0.1</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
-
-        <!-- Linux x64 -->
-        <Content Include="runtimes\linux-x64\native\libssh2.so" Condition="Exists('runtimes\linux-x64\native\libssh2.so')">
+        <Content Include="native\libssh2-linux-x64\libssh2.so.1" Condition="Exists('native\libssh2-linux-x64\libssh2.so.1')">
+            <PackagePath>runtimes/linux-x64/native/libssh2.so.1</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="native\libssh2-linux-x64\libssh2.so" Condition="Exists('native\libssh2-linux-x64\libssh2.so')">
             <PackagePath>runtimes/linux-x64/native/libssh2.so</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
 
         <!-- Linux ARM64 -->
-        <Content Include="runtimes\linux-arm64\native\libssh2.so" Condition="Exists('runtimes\linux-arm64\native\libssh2.so')">
+        <Content Include="native\libssh2-linux-arm64\libssh2.so.1.0.1" Condition="Exists('native\libssh2-linux-arm64\libssh2.so.1.0.1')">
+            <PackagePath>runtimes/linux-arm64/native/libssh2.so.1.0.1</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="native\libssh2-linux-arm64\libssh2.so.1" Condition="Exists('native\libssh2-linux-arm64\libssh2.so.1')">
+            <PackagePath>runtimes/linux-arm64/native/libssh2.so.1</PackagePath>
+            <Pack>true</Pack>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="native\libssh2-linux-arm64\libssh2.so" Condition="Exists('native\libssh2-linux-arm64\libssh2.so')">
             <PackagePath>runtimes/linux-arm64/native/libssh2.so</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
 
         <!-- macOS x64 -->
-        <Content Include="runtimes\osx-x64\native\libssh2.dylib" Condition="Exists('runtimes\osx-x64\native\libssh2.dylib')">
+        <Content Include="native\libssh2-osx-x64\libssh2.dylib" Condition="Exists('native\libssh2-osx-x64\libssh2.dylib')">
             <PackagePath>runtimes/osx-x64/native/libssh2.dylib</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
 
         <!-- macOS ARM64 (Apple Silicon) -->
-        <Content Include="runtimes\osx-arm64\native\libssh2.dylib" Condition="Exists('runtimes\osx-arm64\native\libssh2.dylib')">
+        <Content Include="native\libssh2-osx-arm64\libssh2.dylib" Condition="Exists('native\libssh2-osx-arm64\libssh2.dylib')">
             <PackagePath>runtimes/osx-arm64/native/libssh2.dylib</PackagePath>
             <Pack>true</Pack>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
+    </ItemGroup>
+    <ItemGroup>
+      <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
     </ItemGroup>
 
 </Project>

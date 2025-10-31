@@ -12,4 +12,8 @@
         <ProjectReference Include="..\NullOpsDevs.LibSsh\NullOpsDevs.LibSsh.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Spectre.Console" Version="0.53.0" />
+    </ItemGroup>
+
 </Project>

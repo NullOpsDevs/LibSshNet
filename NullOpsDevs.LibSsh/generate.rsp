@@ -48,4 +48,4 @@ _libssh2_
 
 # Method class name for static P/Invoke methods
 --methodClassName
-LibSSH2
+LibSshNative

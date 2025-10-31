@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace NullOpsDevs.LibSsh.Generated;
 
-public static unsafe partial class LibSSH2
+public static unsafe partial class LibSshNative
 {
     [DllImport("libssh2", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int libssh2_sign_sk([NativeTypeName("LIBSSH2_SESSION *")] _LIBSSH2_SESSION* session, [NativeTypeName("unsigned char **")] byte** sig, [NativeTypeName("size_t *")] nuint* sig_len, [NativeTypeName("const unsigned char *")] byte* data, [NativeTypeName("size_t")] nuint data_len, void** @abstract);
