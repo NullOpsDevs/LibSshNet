@@ -19,7 +19,12 @@ namespace NullOpsDevs.LibSsh.Core;
 public sealed class SshSession : IDisposable
 {
     private static bool libraryInitialized;
+    
+#if NET9_0_OR_GREATER
     private readonly Lock localLock = new();
+#else
+    private readonly object localLock = new();
+#endif
 
     private Socket? socket;
     private unsafe _LIBSSH2_SESSION* session;

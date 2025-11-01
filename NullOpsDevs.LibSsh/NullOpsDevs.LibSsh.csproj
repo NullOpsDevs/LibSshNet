@@ -1,10 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
 
         <!-- NuGet Package Settings -->
         <PackageId>NullOpsDevs.LibSsh</PackageId>
@@ -78,11 +79,11 @@
         </Content>
     </ItemGroup>
     <ItemGroup>
-      <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
+      <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" PrivateAssets="All" />
     </ItemGroup>
 
     <ItemGroup>
-      <InternalsVisibleTo Include="NullOpsDevs.LibSsh.Test" />
+      <InternalsVisibleTo Include="NullOpsDevs.LibSsh.Test"  />
     </ItemGroup>
 
 </Project>

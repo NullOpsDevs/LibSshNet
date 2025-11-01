@@ -17,7 +17,11 @@ public static class LibSsh2
     /// <summary>
     /// Gets the global lock used for thread-safe library initialization.
     /// </summary>
+#if NET9_0_OR_GREATER
     public static readonly Lock GlobalLock = new();
+#else
+    public static readonly object GlobalLock = new();
+#endif
 
     /// <summary>
     /// Gets or sets the global logger action for libssh2 operations.
