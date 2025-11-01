@@ -1,6 +1,6 @@
 using JetBrains.Annotations;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Terminal;
 
 /// <summary>
 /// Fluent builder for constructing terminal modes byte array for PTY requests.

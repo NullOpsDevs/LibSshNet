@@ -1,7 +1,8 @@
 ﻿using System.Text;
 using NullOpsDevs.LibSsh.Generated;
+using NullOpsDevs.LibSsh.Interop;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Core;
 
 /// <summary>
 /// Provides utilities for reading data from SSH channel streams.

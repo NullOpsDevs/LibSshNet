@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using NullOpsDevs.LibSsh.Core;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Exceptions;

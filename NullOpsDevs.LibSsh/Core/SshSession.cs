@@ -1,12 +1,16 @@
 ﻿using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
+using NullOpsDevs.LibSsh.Credentials;
 using NullOpsDevs.LibSsh.Exceptions;
 using NullOpsDevs.LibSsh.Extensions;
 using NullOpsDevs.LibSsh.Generated;
+using NullOpsDevs.LibSsh.Interop;
+using NullOpsDevs.LibSsh.Platform;
+using NullOpsDevs.LibSsh.Terminal;
 using static NullOpsDevs.LibSsh.Generated.LibSshNative;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Core;
 
 /// <summary>
 /// Represents an SSH session for connecting to and communicating with remote SSH servers.

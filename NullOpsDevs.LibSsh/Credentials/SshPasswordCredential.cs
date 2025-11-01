@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using NullOpsDevs.LibSsh.Generated;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Credentials;
 
 /// <summary>
 /// Represents SSH authentication using username and password.

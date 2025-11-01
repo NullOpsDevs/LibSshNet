@@ -2,7 +2,7 @@
 using JetBrains.Annotations;
 using NullOpsDevs.LibSsh.Generated;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Core;
 
 /// <summary>
 /// Represents SSH error codes from libssh2 and custom error codes.

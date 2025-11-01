@@ -1,6 +1,7 @@
 using NullOpsDevs.LibSsh.Generated;
+using NullOpsDevs.LibSsh.Interop;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Credentials;
 
 /// <summary>
 /// Represents SSH authentication using the SSH agent (ssh-agent on Unix, pageant on Windows).

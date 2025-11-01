@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Interop;
 
 /// <summary>
 /// Represents a disposable wrapper around unmanaged memory allocated from the global heap.

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Platform;
 
 /// <summary>
 /// Platform-specific file stat structure for MinGW64 (Windows).

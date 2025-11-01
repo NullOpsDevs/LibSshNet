@@ -1,6 +1,6 @@
 ﻿using NullOpsDevs.LibSsh.Generated;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Credentials;
 
 /// <summary>
 /// Abstract base class for SSH authentication credentials.

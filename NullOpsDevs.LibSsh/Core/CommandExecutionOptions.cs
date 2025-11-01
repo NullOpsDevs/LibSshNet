@@ -1,7 +1,8 @@
 ﻿using JetBrains.Annotations;
 using NullOpsDevs.LibSsh.Generated;
+using NullOpsDevs.LibSsh.Terminal;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Core;
 
 /// <summary>
 /// Options for SSH command execution.

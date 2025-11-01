@@ -1,7 +1,7 @@
 ﻿using JetBrains.Annotations;
 using NullOpsDevs.LibSsh.Generated;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Interop;
 
 /// <summary>
 /// Provides global utilities and configuration for the libssh2 library.

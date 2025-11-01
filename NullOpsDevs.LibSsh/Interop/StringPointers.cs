@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Interop;
 
 /// <summary>
 /// Provides cached native string pointers for commonly used libssh2 string constants.

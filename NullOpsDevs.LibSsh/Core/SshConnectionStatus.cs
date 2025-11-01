@@ -1,4 +1,4 @@
-﻿namespace NullOpsDevs.LibSsh;
+﻿namespace NullOpsDevs.LibSsh.Core;
 
 /// <summary>
 /// Represents the connection status of an SSH session.

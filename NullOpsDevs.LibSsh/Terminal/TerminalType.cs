@@ -1,6 +1,6 @@
 using JetBrains.Annotations;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Terminal;
 
 /// <summary>
 /// Terminal type for PTY (pseudo-terminal) requests.

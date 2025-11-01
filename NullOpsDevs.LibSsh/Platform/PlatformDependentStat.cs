@@ -1,7 +1,8 @@
 ﻿using System.Runtime.InteropServices;
+using NullOpsDevs.LibSsh.Core;
 using NullOpsDevs.LibSsh.Exceptions;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Platform;
 
 /// <summary>
 /// Platform-agnostic wrapper for file stat structures across different operating systems.

@@ -1,6 +1,9 @@
 using System.Runtime.InteropServices;
 using Spectre.Console;
 using System.Text;
+using NullOpsDevs.LibSsh.Core;
+using NullOpsDevs.LibSsh.Credentials;
+using NullOpsDevs.LibSsh.Terminal;
 
 namespace NullOpsDevs.LibSsh.Test;
 

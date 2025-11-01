@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using JetBrains.Annotations;
 
-namespace NullOpsDevs.LibSsh;
+namespace NullOpsDevs.LibSsh.Terminal;
 
 /// <summary>
 /// Terminal mode opcodes as defined in RFC 4254, Section 8.
