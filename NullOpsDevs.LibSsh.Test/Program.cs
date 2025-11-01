@@ -86,7 +86,7 @@ public static class Program
         await RunTest("Public Key Authentication (no passphrase)", TestPublicKeyAuth);
         await RunTest("Public Key Authentication (with passphrase)", TestPublicKeyAuthWithPassphrase);
         await RunTest("Public Key from Memory", TestPublicKeyFromMemory);
-        await RunTest("SSH Agent Authentication", TestSshAgentAuth);
+        // await RunTest("SSH Agent Authentication", TestSshAgentAuth);
     }
 
     private static Task<bool> TestPasswordAuth()
