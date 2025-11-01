@@ -1,5 +1,4 @@
 ﻿using NullOpsDevs.LibSsh.Exceptions;
-using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Extensions;
 

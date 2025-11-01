@@ -81,4 +81,8 @@
       <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="NullOpsDevs.LibSsh.Test" />
+    </ItemGroup>
+
 </Project>

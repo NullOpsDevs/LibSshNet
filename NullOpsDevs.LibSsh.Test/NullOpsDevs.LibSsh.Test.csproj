@@ -16,4 +16,9 @@
       <PackageReference Include="Spectre.Console" Version="0.53.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Include="docker\test-keys\**" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="docker\test-files\**" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>

@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using NullOpsDevs.LibSsh.Exceptions;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh;
@@ -62,8 +61,20 @@ internal static class ChannelReader
 
             if (bytesRead > 0)
             {
-                totalBytesRead += bytesRead;
-                destination.Write(new ReadOnlySpan<byte>(buffer.AsPointer<byte>(), (int)bytesRead));
+                // Limit bytes to write if we have an expected size
+                var bytesToWrite = bytesRead;
+                if (expectedSize.HasValue)
+                {
+                    var remaining = expectedSize.Value - totalBytesRead;
+                    bytesToWrite = (int)Math.Min(bytesRead, remaining);
+                }
+
+                totalBytesRead += bytesToWrite;
+                destination.Write(new ReadOnlySpan<byte>(buffer.AsPointer<byte>(), (int)bytesToWrite));
+
+                // If we've written exactly the expected amount, stop reading
+                if (expectedSize.HasValue && totalBytesRead >= expectedSize.Value)
+                    break;
             }
             else if (bytesRead == 0)
             {

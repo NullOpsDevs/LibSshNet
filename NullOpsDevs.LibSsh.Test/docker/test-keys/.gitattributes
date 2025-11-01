@@ -1,0 +1,2 @@
+# Force LF line endings for SSH key files
+* text eol=lf

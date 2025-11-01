@@ -20,6 +20,11 @@ internal readonly ref struct NativeBuffer(IntPtr pointer, int length) : IDisposa
     /// Gets the length of the allocated memory in bytes.
     /// </summary>
     public int Length { get; } = length;
+    
+    /// <summary>
+    /// Returns the allocated memory as a UTF-8 encoded string.
+    /// </summary>
+    public string AsString() => Marshal.PtrToStringUTF8(Pointer) ?? string.Empty;
 
     /// <summary>
     /// Gets a span view of the allocated memory as bytes.
