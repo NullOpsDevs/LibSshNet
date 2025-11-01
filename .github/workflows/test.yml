@@ -1,4 +1,4 @@
-name: Test and Publish
+name: Test
 
 on:
   push:
@@ -38,12 +38,3 @@ jobs:
       if: always()
       working-directory: ./NullOpsDevs.LibSsh.Test
       run: docker compose down -v
-
-  # Placeholder for NuGet publish job (will be added later)
-  # publish:
-  #   needs: test
-  #   runs-on: ubuntu-latest
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   steps:
-  #     - name: Publish to NuGet
-  #       run: echo "NuGet publish steps will be added here"
