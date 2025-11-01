@@ -3,6 +3,11 @@ using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh;
 
+/// <summary>
+/// Represents SSH authentication using username and password.
+/// </summary>
+/// <param name="username">The username for authentication.</param>
+/// <param name="password">The password for authentication.</param>
 public class SshPasswordCredential(string username, string password) : SshCredential
 {
     /// <inheritdoc />

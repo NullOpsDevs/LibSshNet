@@ -4,6 +4,9 @@ using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh;
 
+/// <summary>
+/// Represents SSH error codes from libssh2 and custom error codes.
+/// </summary>
 [PublicAPI]
 [SuppressMessage("Design", "CA1069:Enums values should not be duplicated")]
 public enum SshError
