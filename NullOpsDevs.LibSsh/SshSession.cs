@@ -36,6 +36,8 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     public SshConnectionStatus ConnectionStatus { get; private set; }
     
     internal unsafe _LIBSSH2_SESSION* SessionPtr { get; private set; }
+    
+    private readonly Dictionary<SshMethod, string> methodPreferences = new();
 
     private void EnsureInitialized()
     {
@@ -49,7 +51,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             var initResult = libssh2_init(0);
             logger?.LogDebug("libssh2_init returned: {InitResult}", initResult);
             
-            initResult.ThrowIfNotSuccessful("LibSSH2 initialization failed");
+            initResult.ThrowIfNotSuccessful(this, "LibSSH2 initialization failed");
             libraryInitialized = true;
         }
     }
@@ -107,11 +109,29 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             }
 
             logger?.LogDebug("Connected to server: '{Host}:{Port}'", host, port);
+            
+            logger?.LogDebug("Setting method preferences...");
+
+            foreach (var (method, pref) in methodPreferences)
+            {
+                logger?.LogDebug("Setting method preference for '{Method:G}' to '{Pref}'", method, pref);
+                
+                using var prefBuffer = NativeBuffer.Allocate(pref);
+                
+                var prefResult = libssh2_session_method_pref(newSession, (int) method, prefBuffer.AsPointer<sbyte>());
+                
+                prefResult.ThrowIfNotSuccessful(this, $"Failed to set preference to '{method:G}' to '{pref}'", also: () =>
+                {
+                    _ = libssh2_session_free(newSession);
+                    socket.Dispose();
+                });
+            }
+            
             logger?.LogDebug("Handshaking...");
 
             var result = libssh2_session_handshake(newSession, (ulong)socket.Handle);
 
-            result.ThrowIfNotSuccessful("Failed to handshake with server", also: () =>
+            result.ThrowIfNotSuccessful(this, "Failed to handshake with server", also: () =>
             {
                 _ = libssh2_session_free(newSession);
                 socket.Dispose();
@@ -191,15 +211,15 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// This method must be called before connecting to the server. The session must be in <see cref="SshConnectionStatus.Disconnected"/> status.
     /// Use <see cref="SetSecureMethodPreferences"/> to apply a predefined set of secure defaults.
     /// </remarks>
-    public unsafe void SetMethodPreferences(SshMethod method, string preferences)
+    public void SetMethodPreferences(SshMethod method, string preferences)
     {
+        if(string.IsNullOrWhiteSpace(preferences))
+            throw new ArgumentException("Preferences cannot be empty", nameof(preferences));
+        
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.Disconnected);
         
-        using var preferencesBuffer = NativeBuffer.Allocate(preferences);
-        
-        var result = libssh2_session_method_pref(SessionPtr, (int) method, preferencesBuffer.AsPointer<sbyte>());
-        result.ThrowIfNotSuccessful("Failed to set preferences");
+        methodPreferences[method] = preferences;
     }
 
     /// <summary>
@@ -368,7 +388,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
                 options.TerminalHeightPixels
             );
 
-            ptyResult.ThrowIfNotSuccessful("Failed to request PTY", also: () =>
+            ptyResult.ThrowIfNotSuccessful(this, "Failed to request PTY", also: () =>
             {
                 libssh2_channel_close(channel);
                 libssh2_channel_wait_closed(channel);
@@ -389,7 +409,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             (uint)commandBytes.Length
         );
 
-        processStartupResult.ThrowIfNotSuccessful("Unable to execute command", also: () =>
+        processStartupResult.ThrowIfNotSuccessful(this, "Unable to execute command", also: () =>
         {
             libssh2_channel_close(channel);
             libssh2_channel_wait_closed(channel);

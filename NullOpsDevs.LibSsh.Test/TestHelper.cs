@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
 using NullOpsDevs.LibSsh.Credentials;
 
 namespace NullOpsDevs.LibSsh.Test;
@@ -13,7 +14,12 @@ public static class TestHelper
     /// </summary>
     public static SshSession CreateAndConnect()
     {
-        var session = new SshSession();
+        ILogger? logger = null;
+
+        if (Environment.GetEnvironmentVariable("DEBUG_LOGGING") != null)
+            logger = new AnsiConsoleLogger();
+        
+        var session = new SshSession(logger);
         session.Connect(TestConfig.Host, TestConfig.Port);
         return session;
     }

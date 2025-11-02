@@ -12,16 +12,27 @@ internal static class LibSshExtensions
     /// Throws an <see cref="SshException"/> if the libssh2 return code indicates failure (negative value).
     /// </summary>
     /// <param name="return">The libssh2 function return code.</param>
+    /// <param name="session">Libssh2 session.</param>
     /// <param name="message">Optional custom error message.</param>
     /// <param name="also">Optional action to execute before throwing the exception (e.g., cleanup).</param>
     /// <exception cref="SshException">Thrown when the return code is negative (indicates error).</exception>
-    public static void ThrowIfNotSuccessful(this int @return, string? message = null, Action? also = null)
+    public static unsafe void ThrowIfNotSuccessful(this int @return, SshSession session,
+        string? message = null, Action? also = null)
     {
         if (@return >= 0)
             return;
 
         also?.Invoke();
-        throw new SshException(message ?? "Unhandled exception", (SshError)@return);
+
+        if (session.SessionPtr != null)
+        {
+            if (message != null)
+                throw SshException.FromLastSessionError(session.SessionPtr, message);
+            
+            throw SshException.FromLastSessionError(session.SessionPtr);
+        }
+
+        throw new SshException(message ?? "Unknown error", (SshError)@return);
     }
 
     /// <summary>

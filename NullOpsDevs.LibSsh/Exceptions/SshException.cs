@@ -21,17 +21,18 @@ public class SshException(string message, SshError error, Exception? innerExcept
     /// Creates an <see cref="SshException"/> from the last error that occurred in the specified libssh2 session.
     /// </summary>
     /// <param name="session">Pointer to the libssh2 session.</param>
+    /// <param name="additionalMessage">Additional message.</param>
     /// <returns>An <see cref="SshException"/> containing the error code and message from the session.</returns>
-    internal static unsafe SshException FromLastSessionError(_LIBSSH2_SESSION* session)
+    internal static unsafe SshException FromLastSessionError(_LIBSSH2_SESSION* session, string? additionalMessage = null)
     {
         sbyte* errorMsg = null;
         var errorMsgLen = 0;
         var errorCode = LibSshNative.libssh2_session_last_error(session, &errorMsg, &errorMsgLen, 0);
         
-        var errorText = errorMsg != null 
-            ? Marshal.PtrToStringAnsi((IntPtr)errorMsg, errorMsgLen) 
-            : "Unknown error";
+        var errorText = errorMsg != null ?
+            Marshal.PtrToStringAnsi((IntPtr)errorMsg, errorMsgLen) : 
+            "Unknown error";
         
-        return new SshException($"[{(SshError)errorCode:G}] {errorText}", (SshError) errorCode);
+        return new SshException($"{(additionalMessage != null ? $"{additionalMessage}: " : "")} [{(SshError)errorCode:G}] {errorText}", (SshError) errorCode);
     }
 }

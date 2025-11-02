@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using NullOpsDevs.LibSsh.Core;
 using NullOpsDevs.LibSsh.Credentials;
+using NullOpsDevs.LibSsh.Exceptions;
 using NullOpsDevs.LibSsh.Terminal;
 using Spectre.Console;
 
@@ -27,8 +28,6 @@ public static class Program
             AnsiConsole.MarkupLine("[red]Failed to load native library. Exiting.[/]");
             return 255;
         }
-
-        // LibSsh2.GlobalLogger = msg => AnsiConsole.MarkupLine($"[grey]{Markup.Escape(msg)}[/]");
 
         // Wait for Docker containers
         AnsiConsole.MarkupLine("[yellow]Waiting for Docker containers to be ready...[/]");
@@ -548,16 +547,41 @@ public static class Program
         await RunTest("Command with large output", TestLargeOutput);
         await RunTest("Multiple sequential operations", TestMultipleOperations);
         await RunTest("Timeout test", TimeoutTest);
+        await RunTest("Won't connect with empty methods", WontConnectWithEmptyMethods);
+    }
+
+    private static Task<bool> WontConnectWithEmptyMethods()
+    {
+        var session = new SshSession();
+        session.SetMethodPreferences(SshMethod.Kex, "diffie-hellman-group1-sha1");
+
+        try
+        {
+            session.Connect(TestConfig.Host, TestConfig.Port);
+        }
+        catch (SshException)
+        {
+            return Task.FromResult(true);
+        }
+
+        return Task.FromResult(false);
     }
 
     private static Task<bool> TimeoutTest()
     {
         var session = TestHelper.CreateConnectAndAuthenticate();
         session.SetSessionTimeout(TimeSpan.FromMilliseconds(1));
+
+        try
+        {
+            _ = session.ExecuteCommand("sleep 10");
+        }
+        catch (SshException e) when (e.Error == SshError.Timeout)
+        {
+            return Task.FromResult(true);
+        }
         
-        var result = session.ExecuteCommand("sleep 10");
-        
-        return Task.FromResult(result is { Successful: false });
+        return Task.FromResult(false);
     }
 
     private static Task<bool> TestEmptyFileTransfer()
