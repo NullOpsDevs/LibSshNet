@@ -1,13 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+    <!-- Project settings -->
     <PropertyGroup>
         <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
+    </PropertyGroup>
 
-        <!-- NuGet Package Settings -->
+    <!-- NuGet Package Settings -->
+    <PropertyGroup>
         <PackageId>NullOpsDevs.LibSsh</PackageId>
         <Version>1.0.0</Version>
         <Authors>NullOpsDevs</Authors>
@@ -17,8 +20,20 @@
         <RepositoryUrl>https://github.com/NullOpsDevs/LibSshNet</RepositoryUrl>
         <PackageProjectUrl>https://github.com/NullOpsDevs/LibSshNet</PackageProjectUrl>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    </PropertyGroup>
+    
+    <!-- NuGet build settings -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <DebugSymbols>true</DebugSymbols>
+        <DebugType>embedded</DebugType>
+        <DocumentationFile>bin/Release/NullOpsDevs.LibSsh.xml</DocumentationFile>
+
+        <!-- Reproducible builds -->
+        <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+        <!-- SourceLink -->
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
     </PropertyGroup>
 
     <!-- Include native libraries for different platforms -->
@@ -81,7 +96,8 @@
     
     <!-- NuGet dependencies -->
     <ItemGroup>
-      <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" PrivateAssets="All" />
+        <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" PrivateAssets="All" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
     </ItemGroup>
     
     <!-- NET8 dependencies -->
