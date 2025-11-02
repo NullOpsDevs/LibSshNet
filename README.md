@@ -9,21 +9,21 @@ A modern, cross-platform .NET library providing managed bindings for libssh2, en
 
 ## Features
 
-| Feature        | Subfeature                   | Supported                 |
-|----------------|------------------------------|---------------------------|
-| Authentication |                              |                           |
-|                | Password                     | ✅                         |
-|                | Agent                        | ❔ (supported, not tested) |
-|                | Host based                   | ✅                         |
-|                | Private key                  | ✅                         |
-| SCP            |                              |                           |
-|                | File upload                  | ✅                         |
-|                | File download                | ✅                         |
-| Commands       |                              |                           |
-|                | One-shot command execution   | ✅                         |
-|                | PTY                          | ✅                         |
-|                | Terminal type/mode selection | ✅                         |
-|                | Shell mode                   | ❌                         |
+| Feature        | Subfeature                   | Supported |
+|----------------|------------------------------|-----------|
+| Authentication |                              |           |
+|                | Password                     | ✅         |
+|                | Agent                        | ✅         |
+|                | Host based                   | ✅         |
+|                | Private key                  | ✅         |
+| SCP            |                              |           |
+|                | File upload                  | ✅         |
+|                | File download                | ✅         |
+| Commands       |                              |           |
+|                | One-shot command execution   | ✅         |
+|                | PTY                          | ✅         |
+|                | Terminal type/mode selection | ✅         |
+|                | Shell mode                   | ❌         |
 
 
 ## Installation

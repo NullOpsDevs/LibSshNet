@@ -48,11 +48,11 @@ public static class Program
 
         // Run test categories
         await RunTestCategory("Authentication Tests", RunAuthenticationTests);
-        // await RunTestCategory("Command Execution Tests", RunCommandTests);
-        // await RunTestCategory("File Transfer Tests", RunFileTransferTests);
-        // await RunTestCategory("Terminal Features Tests", RunTerminalTests);
-        // await RunTestCategory("Error Handling Tests", RunErrorHandlingTests);
-        // await RunTestCategory("Edge Case Tests", RunEdgeCaseTests);
+        await RunTestCategory("Command Execution Tests", RunCommandTests);
+        await RunTestCategory("File Transfer Tests", RunFileTransferTests);
+        await RunTestCategory("Terminal Features Tests", RunTerminalTests);
+        await RunTestCategory("Error Handling Tests", RunErrorHandlingTests);
+        await RunTestCategory("Edge Case Tests", RunEdgeCaseTests);
 
         // Display summary
         AnsiConsole.WriteLine();
@@ -82,11 +82,11 @@ public static class Program
 
     private static async Task RunAuthenticationTests()
     {
-        // await RunTest("Host key retrival", TestHostKeyRetrival);
-        // await RunTest("Password Authentication", TestPasswordAuth);
-        // await RunTest("Public Key Authentication (no passphrase)", TestPublicKeyAuth);
-        // await RunTest("Public Key Authentication (with passphrase)", TestPublicKeyAuthWithPassphrase);
-        // await RunTest("Public Key from Memory", TestPublicKeyFromMemory);
+        await RunTest("Host key retrival", TestHostKeyRetrival);
+        await RunTest("Password Authentication", TestPasswordAuth);
+        await RunTest("Public Key Authentication (no passphrase)", TestPublicKeyAuth);
+        await RunTest("Public Key Authentication (with passphrase)", TestPublicKeyAuthWithPassphrase);
+        await RunTest("Public Key from Memory", TestPublicKeyFromMemory);
         await RunTest("SSH Agent Authentication", TestSshAgentAuth);
     }
 
