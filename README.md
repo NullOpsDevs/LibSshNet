@@ -9,21 +9,46 @@ A modern, cross-platform .NET library providing managed bindings for libssh2, en
 
 ## Features
 
-| Feature        | Subfeature                   | Supported |
-|----------------|------------------------------|-----------|
-| Authentication |                              |           |
-|                | Password                     | ✅         |
-|                | Agent                        | ✅         |
-|                | Host based                   | ✅         |
-|                | Private key                  | ✅         |
-| SCP            |                              |           |
-|                | File upload                  | ✅         |
-|                | File download                | ✅         |
-| Commands       |                              |           |
-|                | One-shot command execution   | ✅         |
-|                | PTY                          | ✅         |
-|                | Terminal type/mode selection | ✅         |
-|                | Shell mode                   | ❌         |
+| Category                | Feature                                  | Method(s)                                            | Supported |
+|-------------------------|------------------------------------------|------------------------------------------------------|-----------|
+| **Authentication**      |                                          |                                                      |           |
+|                         | Password authentication                  | `Authenticate(PasswordCredential)`                   | ✅         |
+|                         | Public key authentication                | `Authenticate(PublicKeyCredential)`                  | ✅         |
+|                         | SSH agent authentication                 | `Authenticate(SshAgentCredential)`                   | ✅         |
+|                         | Host-based authentication                | `Authenticate(HostBasedCredential)`                  | ✅         |
+|                         | Keyboard-interactive authentication      | -                                                    | ❌         |
+| **Session Management**  |                                          |                                                      |           |
+|                         | Connection                               | `Connect`, `ConnectAsync`                            | ✅         |
+|                         | Host key retrieval                       | `GetHostKey`                                         | ✅         |
+|                         | Host key verification                    | `GetHostKeyHash`                                     | ✅         |
+|                         | Session timeout configuration            | `SetSessionTimeout`, `DisableSessionTimeout`         | ✅         |
+|                         | Keepalive configuration                  | `ConfigureKeepAlive`, `SendKeepAlive`                | ✅         |
+|                         | Method preference configuration          | `SetMethodPreferences`                               | ✅         |
+|                         | Secure default algorithms                | `SetSecureMethodPreferences`                         | ✅         |
+|                         | Negotiated method inspection             | `GetNegotiatedMethod`                                | ✅         |
+| **File Transfer (SCP)** |                                          |                                                      |           |
+|                         | File upload                              | `WriteFile`, `WriteFileAsync`                        | ✅         |
+|                         | File download                            | `ReadFile`, `ReadFileAsync`                          | ✅         |
+| **Command Execution**   |                                          |                                                      |           |
+|                         | One-shot command execution               | `ExecuteCommand`, `ExecuteCommandAsync`              | ✅         |
+|                         | Exit code retrieval                      | `SshCommandResult.ExitCode`                          | ✅         |
+|                         | Exit signal retrieval                    | `SshCommandResult.ExitSignal`                        | ✅         |
+|                         | stdout/stderr separation                 | `SshCommandResult.Stdout`, `SshCommandResult.Stderr` | ✅         |
+| **Terminal (PTY)**      |                                          |                                                      |           |
+|                         | PTY allocation                           | `CommandExecutionOptions.RequestPty`                 | ✅         |
+|                         | Terminal type selection                  | `CommandExecutionOptions.TerminalType`               | ✅         |
+|                         | Terminal modes                           | `CommandExecutionOptions.TerminalModes`              | ✅         |
+|                         | Window size configuration                | `CommandExecutionOptions.TerminalWidth/Height`       | ✅         |
+|                         | Interactive shell mode                   | -                                                    | ❌         |
+| **Error Handling**      |                                          |                                                      |           |
+|                         | Typed exceptions                         | `SshException`                                       | ✅         |
+|                         | Detailed error messages                  | `SshException.Message`                               | ✅         |
+|                         | 60+ error code mappings                  | `SshError` enum                                      | ✅         |
+| **Advanced Features**   |                                          |                                                      |           |
+|                         | Host key type detection                  | `SshHostKey.Type`                                    | ✅         |
+|                         | Microsoft.Extensions.Logging integration | Constructor `ILogger` parameter                      | ✅         |
+|                         | Cross-platform native binaries           | Bundled in NuGet package                             | ✅         |
+| **Thread Safety**       | `SshSession` is *NOT* thread-safe.       | -                                                    | ❌         |
 
 
 ## Installation

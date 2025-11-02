@@ -16,7 +16,7 @@ internal static class LibSshExtensions
     /// <param name="message">Optional custom error message.</param>
     /// <param name="also">Optional action to execute before throwing the exception (e.g., cleanup).</param>
     /// <exception cref="SshException">Thrown when the return code is negative (indicates error).</exception>
-    public static unsafe void ThrowIfNotSuccessful(this int @return, SshSession session,
+    internal static unsafe void ThrowIfNotSuccessful(this int @return, SshSession session,
         string? message = null, Action? also = null)
     {
         if (@return >= 0)
@@ -40,7 +40,7 @@ internal static class LibSshExtensions
     /// </summary>
     /// <param name="exception">The exception to convert.</param>
     /// <returns>An SshException wrapping the original exception.</returns>
-    public static SshException AsSshException(this Exception exception)
+    internal static SshException AsSshException(this Exception exception)
     {
         return new SshException(exception.Message, SshError.InnerException, exception);
     }

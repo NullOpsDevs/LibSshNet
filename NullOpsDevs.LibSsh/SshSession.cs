@@ -80,9 +80,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <param name="port">The port number of the SSH server (typically 22).</param>
     /// <exception cref="SshException">Thrown when connection or SSH handshake fails.</exception>
     /// <remarks>
-    /// This method establishes a TCP connection and performs the SSH protocol handshake.
-    /// After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.
-    /// You must call <see cref="Authenticate"/> before executing commands.
+    /// <para>This method establishes a TCP connection and performs the SSH protocol handshake.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Disconnected"/> status before calling this method.</para>
+    /// <para>After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.</para>
+    /// <para>You must call <see cref="Authenticate"/> before executing commands.</para>
     /// </remarks>
     public unsafe void Connect(string host, int port)
     {
@@ -252,9 +253,16 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// Disables the session timeout, allowing operations to wait indefinitely.
     /// </summary>
     /// <remarks>
-    /// By default, libssh2 has no timeout. Use this method to explicitly disable any previously set timeout.
+    /// <para>By default, libssh2 has no timeout. Use this method to explicitly disable any previously set timeout.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
     /// </remarks>
-    public unsafe void DisableSessionTimeout() => libssh2_session_set_timeout(SessionPtr, 0);
+    public unsafe void DisableSessionTimeout()
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+        
+        libssh2_session_set_timeout(SessionPtr, 0);
+    }
 
     /// <summary>
     /// Sets the maximum time to wait for SSH operations to complete.
@@ -262,7 +270,8 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <param name="timeout">The timeout duration. Must be greater than zero and less than <see cref="int.MaxValue"/> milliseconds.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown if the timeout is negative or exceeds the maximum allowed value.</exception>
     /// <remarks>
-    /// This timeout applies to blocking libssh2 operations. If an operation does not complete within the specified time, it will return an error.
+    /// <para>This timeout applies to blocking libssh2 operations. If an operation does not complete within the specified time, it will return an error.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
     /// </remarks>
     public unsafe void SetSessionTimeout(TimeSpan timeout)
     {
@@ -271,10 +280,59 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         
         if(timeout.TotalMilliseconds > int.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout cannot be greater than ");
+     
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
         
         libssh2_session_set_timeout(SessionPtr, (int) timeout.TotalMilliseconds);
     }
 
+    /// <summary>
+    /// Sends a keepalive message to the remote SSH server.
+    /// </summary>
+    /// <returns>The number of seconds until the next keepalive should be sent, based on the configured interval.</returns>
+    /// <exception cref="SshException">Thrown if the keepalive message cannot be sent or the session is not in the correct state.</exception>
+    /// <remarks>
+    /// <para>This method sends an SSH protocol keepalive message to prevent the connection from timing out due to inactivity.</para>
+    /// <para>This method must be called after connecting to the server. The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.</para>
+    /// <para>Use <see cref="ConfigureKeepAlive"/> to set the keepalive interval and whether the server should reply.</para>
+    /// </remarks>
+    public unsafe int SendKeepAlive()
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+
+        var untilNext = 0;
+        var result = libssh2_keepalive_send(SessionPtr, &untilNext);
+
+        result.ThrowIfNotSuccessful(this, "Failed to send keepalive");
+
+        return untilNext;
+    }
+
+    /// <summary>
+    /// Configures the SSH session's keepalive behavior.
+    /// </summary>
+    /// <param name="wantReply">If true, the server will be requested to send a reply to keepalive messages. If false, keepalive messages are sent without expecting a reply.</param>
+    /// <param name="interval">The interval between keepalive messages. Must be greater than or equal to zero.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the interval is negative.</exception>
+    /// <exception cref="SshException">Thrown if the session is not in the correct state.</exception>
+    /// <remarks>
+    /// <para>This method configures the keepalive settings for the SSH session. Keepalive messages help maintain connections that might otherwise timeout due to inactivity or be terminated by firewalls.</para>
+    /// <para>This method must be called after connecting to the server. The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.</para>
+    /// <para>Use <see cref="SendKeepAlive"/> to manually send keepalive messages once configured.</para>
+    /// </remarks>
+    public unsafe void ConfigureKeepAlive(bool wantReply, TimeSpan interval)
+    {
+        if (interval < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(interval), interval, "Interval must be greater than zero");
+
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+
+        libssh2_keepalive_config(SessionPtr, wantReply ? 1 : 0, (uint) interval.TotalSeconds);
+    }
+    
     /// <summary>
     /// Computes a cryptographic hash of the server's host key for verification purposes.
     /// </summary>
@@ -318,9 +376,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
     /// <exception cref="SshException">Thrown when connection or SSH handshake fails.</exception>
     /// <remarks>
-    /// This method offloads the blocking connection and handshake operations to a thread pool thread.
-    /// After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.
-    /// You must call <see cref="AuthenticateAsync"/> or <see cref="Authenticate"/> before executing commands.
+    /// <para>This method offloads the blocking connection and handshake operations to a thread pool thread.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Disconnected"/> status before calling this method.</para>
+    /// <para>After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.</para>
+    /// <para>You must call <see cref="AuthenticateAsync"/> or <see cref="Authenticate"/> before executing commands.</para>
     /// </remarks>
     public Task ConnectAsync(string host, int port, CancellationToken cancellationToken = default)
     {
@@ -335,8 +394,9 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
     /// <returns>The result of the command execution including stdout and stderr output.</returns>
     /// <remarks>
-    /// When <see cref="CommandExecutionOptions.RequestPty"/> is true, a pseudo-terminal (PTY) will be requested
-    /// before executing the command. This enables terminal features like color output and interactive input.
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>When <see cref="CommandExecutionOptions.RequestPty"/> is true, a pseudo-terminal (PTY) will be requested
+    /// before executing the command. This enables terminal features like color output and interactive input.</para>
     /// </remarks>
     public unsafe SshCommandResult ExecuteCommand(string command, CommandExecutionOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -468,9 +528,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation, containing the result of the command execution including stdout and stderr output.</returns>
     /// <remarks>
-    /// This method offloads the blocking command execution to a thread pool thread.
-    /// When <see cref="CommandExecutionOptions.RequestPty"/> is true, a pseudo-terminal (PTY) will be requested
-    /// before executing the command. This enables terminal features like color output and interactive input.
+    /// <para>This method offloads the blocking command execution to a thread pool thread.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>When <see cref="CommandExecutionOptions.RequestPty"/> is true, a pseudo-terminal (PTY) will be requested
+    /// before executing the command. This enables terminal features like color output and interactive input.</para>
     /// </remarks>
     public Task<SshCommandResult> ExecuteCommandAsync(string command, CommandExecutionOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -487,8 +548,9 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <returns>True if the entire file was successfully downloaded; false otherwise.</returns>
     /// <exception cref="SshException">Thrown when the SCP channel cannot be created or other SSH errors occur.</exception>
     /// <remarks>
-    /// This method does not close the destination stream. The caller is responsible for managing the stream's lifecycle.
-    /// The method uses SCP (Secure Copy Protocol) to transfer the file.
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>This method does not close the destination stream. The caller is responsible for managing the stream's lifecycle.</para>
+    /// <para>The method uses SCP (Secure Copy Protocol) to transfer the file.</para>
     /// </remarks>
     public unsafe bool ReadFile(string path, Stream destination, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
@@ -545,8 +607,9 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <returns>A task that represents the asynchronous operation, containing a boolean value indicating whether the entire file was successfully downloaded.</returns>
     /// <exception cref="SshException">Thrown when the SCP channel cannot be created or other SSH errors occur.</exception>
     /// <remarks>
-    /// This method offloads the blocking SCP file transfer to a thread pool thread.
-    /// The destination stream will not be closed by this method. The caller is responsible for managing the stream's lifecycle.
+    /// <para>This method offloads the blocking SCP file transfer to a thread pool thread.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>The destination stream will not be closed by this method. The caller is responsible for managing the stream's lifecycle.</para>
     /// </remarks>
     public Task<bool> ReadFileAsync(string path, Stream destination, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
@@ -565,9 +628,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <exception cref="ArgumentException">Thrown when the source stream is not readable or not seekable.</exception>
     /// <exception cref="SshException">Thrown when the SCP channel cannot be created or other SSH errors occur.</exception>
     /// <remarks>
-    /// This method does not close the source stream. The caller is responsible for managing the stream's lifecycle.
-    /// The method uses SCP (Secure Copy Protocol) to transfer the file.
-    /// The source stream must be seekable because the total file size must be known before transmission begins.
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>This method does not close the source stream. The caller is responsible for managing the stream's lifecycle.</para>
+    /// <para>The method uses SCP (Secure Copy Protocol) to transfer the file.</para>
+    /// <para>The source stream must be seekable because the total file size must be known before transmission begins.</para>
     /// </remarks>
     public unsafe bool WriteFile(string path, Stream source, int mode = 420, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
@@ -635,9 +699,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// <exception cref="ArgumentException">Thrown when the source stream is not readable or not seekable.</exception>
     /// <exception cref="SshException">Thrown when the SCP channel cannot be created or other SSH errors occur.</exception>
     /// <remarks>
-    /// This method offloads the blocking SCP file transfer to a thread pool thread.
-    /// The source stream will not be closed by this method. The caller is responsible for managing the stream's lifecycle.
-    /// The source stream must be seekable because the total file size must be known before transmission begins.
+    /// <para>This method offloads the blocking SCP file transfer to a thread pool thread.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>The source stream will not be closed by this method. The caller is responsible for managing the stream's lifecycle.</para>
+    /// <para>The source stream must be seekable because the total file size must be known before transmission begins.</para>
     /// </remarks>
     public Task<bool> WriteFileAsync(string path, Stream source, int mode = 420, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
