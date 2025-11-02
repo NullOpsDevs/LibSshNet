@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _libssh2_publickey_list
+internal unsafe struct _libssh2_publickey_list
 {
     [NativeTypeName("unsigned char *")]
     public byte* packet;

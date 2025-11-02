@@ -29,12 +29,13 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 #endif
 
     private Socket? socket;
-    private unsafe _LIBSSH2_SESSION* session;
 
     /// <summary>
     /// Gets the current connection status of the SSH session.
     /// </summary>
     public SshConnectionStatus ConnectionStatus { get; private set; }
+    
+    internal unsafe _LIBSSH2_SESSION* SessionPtr { get; private set; }
 
     private void EnsureInitialized()
     {
@@ -119,10 +120,18 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             libssh2_session_set_blocking(newSession, 1);
 
             ConnectionStatus = SshConnectionStatus.Connected;
-            session = newSession;
+            SessionPtr = newSession;
         }
     }
-    
+
+    /// <summary>
+    /// Retrieves the host key from the connected SSH server.
+    /// </summary>
+    /// <returns>The server's host key including the raw key data and algorithm type.</returns>
+    /// <exception cref="SshException">Thrown if the session is not connected or the host key cannot be retrieved.</exception>
+    /// <remarks>
+    /// This method must be called after connecting to the server. The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.
+    /// </remarks>
     public unsafe SshHostKey GetHostKey()
     {
         EnsureInitialized();
@@ -131,10 +140,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         UIntPtr length = 0;
         var type = 0;
         
-        var ptr = libssh2_session_hostkey(session, &length, &type);
+        var ptr = libssh2_session_hostkey(SessionPtr, &length, &type);
         
         if (ptr == null || length == 0)
-            throw SshException.FromLastSessionError(session);
+            throw SshException.FromLastSessionError(SessionPtr);
         
         var buffer = new byte[length];
         Marshal.Copy(new IntPtr(ptr), buffer, 0, (int) length);
@@ -146,6 +155,16 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         };
     }
 
+    /// <summary>
+    /// Gets the negotiated algorithm name for the specified SSH method type.
+    /// </summary>
+    /// <param name="method">The SSH method type to query (e.g., <see cref="SshMethod.Kex"/>, <see cref="SshMethod.CryptCs"/>).</param>
+    /// <returns>The negotiated algorithm name, or null if not available.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the method parameter is not a valid <see cref="SshMethod"/> value.</exception>
+    /// <exception cref="SshException">Thrown if the session is not connected or the method information cannot be retrieved.</exception>
+    /// <remarks>
+    /// This method must be called after connecting to the server. The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.
+    /// </remarks>
     public unsafe string? GetNegotiatedMethod(SshMethod method)
     {
         EnsureInitialized();
@@ -154,14 +173,24 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         if(!Enum.IsDefined(method))
             throw new ArgumentOutOfRangeException(nameof(method), method, null);
         
-        var result = libssh2_session_methods(session, (int) method);
+        var result = libssh2_session_methods(SessionPtr, (int) method);
         
         if(result == null)
-            throw SshException.FromLastSessionError(session);
+            throw SshException.FromLastSessionError(SessionPtr);
 
         return Marshal.PtrToStringAnsi(new IntPtr(result));
     }
-    
+
+    /// <summary>
+    /// Sets the algorithm preference list for the specified SSH method type.
+    /// </summary>
+    /// <param name="method">The SSH method type to configure (e.g., <see cref="SshMethod.Kex"/>, <see cref="SshMethod.CryptCs"/>).</param>
+    /// <param name="preferences">A comma-separated list of algorithm names in preference order (e.g., "aes256-ctr,aes128-ctr").</param>
+    /// <exception cref="SshException">Thrown if the preferences cannot be set or the session is not in the correct state.</exception>
+    /// <remarks>
+    /// This method must be called before connecting to the server. The session must be in <see cref="SshConnectionStatus.Disconnected"/> status.
+    /// Use <see cref="SetSecureMethodPreferences"/> to apply a predefined set of secure defaults.
+    /// </remarks>
     public unsafe void SetMethodPreferences(SshMethod method, string preferences)
     {
         EnsureInitialized();
@@ -169,10 +198,24 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         
         using var preferencesBuffer = NativeBuffer.Allocate(preferences);
         
-        var result = libssh2_session_method_pref(session, (int) method, preferencesBuffer.AsPointer<sbyte>());
+        var result = libssh2_session_method_pref(SessionPtr, (int) method, preferencesBuffer.AsPointer<sbyte>());
         result.ThrowIfNotSuccessful("Failed to set preferences");
     }
 
+    /// <summary>
+    /// Applies a secure set of default algorithm preferences for all SSH method types.
+    /// </summary>
+    /// <remarks>
+    /// <para>This method configures the following secure defaults:</para>
+    /// <list type="bullet">
+    /// <item><description>Key Exchange: curve25519-sha256, ECDH with NIST curves, Diffie-Hellman group exchange</description></item>
+    /// <item><description>Host Keys: Ed25519, ECDSA, RSA-SHA2</description></item>
+    /// <item><description>Ciphers: ChaCha20-Poly1305, AES-GCM, AES-CTR</description></item>
+    /// <item><description>MACs: HMAC-SHA2-256/512 with encrypt-then-MAC</description></item>
+    /// <item><description>Compression: None</description></item>
+    /// </list>
+    /// <para>This method must be called before connecting to the server. The session must be in <see cref="SshConnectionStatus.Disconnected"/> status.</para>
+    /// </remarks>
     public void SetSecureMethodPreferences()
     {
         SetMethodPreferences(SshMethod.Kex, "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256");
@@ -185,8 +228,22 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         SetMethodPreferences(SshMethod.CompSc, "none");
     }
 
-    public unsafe void DisableSessionTimeout() => libssh2_session_set_timeout(session, 0);
+    /// <summary>
+    /// Disables the session timeout, allowing operations to wait indefinitely.
+    /// </summary>
+    /// <remarks>
+    /// By default, libssh2 has no timeout. Use this method to explicitly disable any previously set timeout.
+    /// </remarks>
+    public unsafe void DisableSessionTimeout() => libssh2_session_set_timeout(SessionPtr, 0);
 
+    /// <summary>
+    /// Sets the maximum time to wait for SSH operations to complete.
+    /// </summary>
+    /// <param name="timeout">The timeout duration. Must be greater than zero and less than <see cref="int.MaxValue"/> milliseconds.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the timeout is negative or exceeds the maximum allowed value.</exception>
+    /// <remarks>
+    /// This timeout applies to blocking libssh2 operations. If an operation does not complete within the specified time, it will return an error.
+    /// </remarks>
     public unsafe void SetSessionTimeout(TimeSpan timeout)
     {
         if (timeout < TimeSpan.Zero)
@@ -195,9 +252,20 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         if(timeout.TotalMilliseconds > int.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout cannot be greater than ");
         
-        libssh2_session_set_timeout(session, (int) timeout.TotalMilliseconds);
+        libssh2_session_set_timeout(SessionPtr, (int) timeout.TotalMilliseconds);
     }
 
+    /// <summary>
+    /// Computes a cryptographic hash of the server's host key for verification purposes.
+    /// </summary>
+    /// <param name="keyHashType">The hash algorithm to use (e.g., <see cref="SshHashType.SHA256"/>).</param>
+    /// <returns>A byte array containing the computed hash value.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the keyHashType is not a valid <see cref="SshHashType"/> value.</exception>
+    /// <exception cref="SshException">Thrown if the session is not connected or the hash cannot be computed.</exception>
+    /// <remarks>
+    /// <para>This method must be called after connecting to the server. The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.</para>
+    /// <para>The returned hash can be used to verify the server's identity by comparing it against a known-good fingerprint. SHA-256 is recommended for new implementations.</para>
+    /// </remarks>
     public unsafe byte[] GetHostKeyHash(SshHashType keyHashType)
     {
         EnsureInitialized();
@@ -211,10 +279,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             _ => throw new ArgumentOutOfRangeException(nameof(keyHashType), keyHashType, null)
         };
         
-        var hash = libssh2_hostkey_hash(session, (int) keyHashType);
+        var hash = libssh2_hostkey_hash(SessionPtr, (int) keyHashType);
 
         if (hash == null)
-            throw SshException.FromLastSessionError(session);
+            throw SshException.FromLastSessionError(SessionPtr);
         
         var keyHash = new byte[keySize];
         Marshal.Copy(new IntPtr(hash), keyHash, 0, keySize);
@@ -260,7 +328,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         logger?.LogDebug("Opening channel for command execution: '{Command}'", command);
         
         var channel = libssh2_channel_open_ex(
-            session,
+            SessionPtr,
             StringPointers.Session,
             7,
             options.WindowSize,
@@ -272,7 +340,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         if (channel == null)
         {
             logger?.LogDebug("Failed to open channel");
-            return SshCommandResult.Unsuccessful;
+            throw SshException.FromLastSessionError(SessionPtr);
         }
 
         logger?.LogDebug("Channel opened successfully");
@@ -413,14 +481,14 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 
         logger?.LogDebug("Opening SCP receive channel");
         var scpChannel = libssh2_scp_recv2(
-            session,
+            SessionPtr,
             remotePathBuffer.AsPointer<sbyte>(),
             statBuffer.AsPointer());
 
         if (scpChannel == null)
         {
             logger?.LogDebug("Failed to open SCP receive channel");
-            throw SshException.FromLastSessionError(session);
+            throw SshException.FromLastSessionError(SessionPtr);
         }
 
         logger?.LogDebug("SCP receive channel opened successfully");
@@ -501,7 +569,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 
         logger?.LogDebug("Opening SCP send channel");
         var scpChannel = libssh2_scp_send64(
-            session,
+            SessionPtr,
             remotePathBuffer.AsPointer<sbyte>(),
             mode,
             fileSize,
@@ -511,7 +579,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         if (scpChannel == null)
         {
             logger?.LogDebug("Failed to open SCP send channel");
-            throw SshException.FromLastSessionError(session);
+            throw SshException.FromLastSessionError(SessionPtr);
         }
 
         logger?.LogDebug("SCP send channel opened successfully");
@@ -566,13 +634,13 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// The session must be in <see cref="SshConnectionStatus.Connected"/> status before calling this method.
     /// After successful authentication, the session will be in <see cref="SshConnectionStatus.LoggedIn"/> status.
     /// </remarks>
-    public unsafe bool Authenticate(SshCredential credential)
+    public bool Authenticate(SshCredential credential)
     {
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.Connected);
 
         logger?.LogDebug("Starting authentication with credential type: {Name}", credential.GetType().Name);
-        var result = credential.Authenticate(session);
+        var result = credential.Authenticate(this);
 
         if (result)
         {
@@ -609,12 +677,12 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// </summary>
     internal unsafe string GetLastError()
     {
-        if (session == null)
+        if (SessionPtr == null)
             return "Session is null";
 
         sbyte* errorMsg = null;
         var errorMsgLen = 0;
-        var errorCode = libssh2_session_last_error(session, &errorMsg, &errorMsgLen, 0);
+        var errorCode = libssh2_session_last_error(SessionPtr, &errorMsg, &errorMsgLen, 0);
 
         if (errorCode == 0 || errorMsg == null)
             return "No error";
@@ -628,10 +696,10 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         if(ConnectionStatus == SshConnectionStatus.Disposed)
             return;
 
-        if (session != null)
+        if (SessionPtr != null)
         {
-            _ = libssh2_session_free(session);
-            session = null;
+            _ = libssh2_session_free(SessionPtr);
+            SessionPtr = null;
         }
 
         socket?.Dispose();

@@ -1,5 +1,3 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public partial struct _LIBSSH2_LISTENER
-{
-}
+internal struct _LIBSSH2_LISTENER;

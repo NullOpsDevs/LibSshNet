@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public partial struct _LIBSSH2_SFTP_ATTRIBUTES
+internal struct _LIBSSH2_SFTP_ATTRIBUTES
 {
     [NativeTypeName("unsigned long")]
     public uint flags;

@@ -1,5 +1,3 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public partial struct _LIBSSH2_KNOWNHOSTS
-{
-}
+internal struct _LIBSSH2_KNOWNHOSTS;

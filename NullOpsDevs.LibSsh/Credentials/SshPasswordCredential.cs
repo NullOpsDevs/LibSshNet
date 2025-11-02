@@ -1,6 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using NullOpsDevs.LibSsh.Generated;
+﻿using NullOpsDevs.LibSsh.Generated;
 using NullOpsDevs.LibSsh.Interop;
 
 namespace NullOpsDevs.LibSsh.Credentials;
@@ -13,7 +11,7 @@ namespace NullOpsDevs.LibSsh.Credentials;
 public class SshPasswordCredential(string username, string password) : SshCredential
 {
     /// <inheritdoc />
-    public override unsafe bool Authenticate(_LIBSSH2_SESSION* session)
+    public override unsafe bool Authenticate(SshSession session)
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             return false;
@@ -22,7 +20,7 @@ public class SshPasswordCredential(string username, string password) : SshCreden
         using var passwordBuffer = NativeBuffer.Allocate(password);
         
         var authResult = LibSshNative.libssh2_userauth_password_ex(
-            session,
+            session.SessionPtr,
             usernameBuffer.AsPointer<sbyte>(), (uint)usernameBuffer.Length,
             passwordBuffer.AsPointer<sbyte>(), (uint)passwordBuffer.Length, null);
         

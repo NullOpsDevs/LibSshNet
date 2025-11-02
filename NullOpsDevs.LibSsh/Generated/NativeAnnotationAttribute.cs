@@ -3,9 +3,9 @@ using System.Diagnostics;
 namespace NullOpsDevs.LibSsh.Generated;
 
 /// <summary>Defines the annotation found in a native declaration.</summary>
-[AttributeUsage(AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter | AttributeTargets.ReturnValue, AllowMultiple = true, Inherited = false)]
+[AttributeUsage(AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter | AttributeTargets.ReturnValue, AllowMultiple = true)]
 [Conditional("DEBUG")]
-internal sealed partial class NativeAnnotationAttribute : Attribute
+internal sealed class NativeAnnotationAttribute : Attribute
 {
     private readonly string _annotation;
 

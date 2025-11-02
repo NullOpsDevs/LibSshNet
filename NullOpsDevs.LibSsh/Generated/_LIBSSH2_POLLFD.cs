@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _LIBSSH2_POLLFD
+internal unsafe struct _LIBSSH2_POLLFD
 {
     [NativeTypeName("unsigned char")]
     public byte type;
@@ -17,7 +17,7 @@ public unsafe partial struct _LIBSSH2_POLLFD
     public uint revents;
 
     [StructLayout(LayoutKind.Explicit)]
-    public unsafe partial struct _fd_e__Union
+    internal struct _fd_e__Union
     {
         [FieldOffset(0)]
         [NativeTypeName("libssh2_socket_t")]

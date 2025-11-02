@@ -26,7 +26,7 @@ public class SshHostBasedCredential(
     string? localUsername = null) : SshCredential
 {
     /// <inheritdoc />
-    public override unsafe bool Authenticate(_LIBSSH2_SESSION* session)
+    public override unsafe bool Authenticate(SshSession session)
     {
         if (string.IsNullOrWhiteSpace(username))
             return false;
@@ -49,7 +49,7 @@ public class SshHostBasedCredential(
         using var localUsernameBuffer = NativeBuffer.Allocate(effectiveLocalUsername);
 
         var authResult = LibSshNative.libssh2_userauth_hostbased_fromfile_ex(
-            session,
+            session.SessionPtr,
             usernameBuffer.AsPointer<sbyte>(),
             (uint)usernameBuffer.Length,
             publicKeyPathBuffer.AsPointer<sbyte>(),

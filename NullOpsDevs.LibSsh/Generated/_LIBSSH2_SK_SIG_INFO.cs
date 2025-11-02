@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _LIBSSH2_SK_SIG_INFO
+internal unsafe struct _LIBSSH2_SK_SIG_INFO
 {
     [NativeTypeName("uint8_t")]
     public byte flags;

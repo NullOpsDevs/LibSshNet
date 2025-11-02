@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _libssh2_publickey_attribute
+internal unsafe struct _libssh2_publickey_attribute
 {
     [NativeTypeName("const char *")]
     public sbyte* name;

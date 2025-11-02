@@ -17,7 +17,12 @@ public class SshException(string message, SshError error, Exception? innerExcept
     /// </summary>
     public SshError Error { get; } = error;
 
-    public static unsafe SshException FromLastSessionError(_LIBSSH2_SESSION* session)
+    /// <summary>
+    /// Creates an <see cref="SshException"/> from the last error that occurred in the specified libssh2 session.
+    /// </summary>
+    /// <param name="session">Pointer to the libssh2 session.</param>
+    /// <returns>An <see cref="SshException"/> containing the error code and message from the session.</returns>
+    internal static unsafe SshException FromLastSessionError(_LIBSSH2_SESSION* session)
     {
         sbyte* errorMsg = null;
         var errorMsgLen = 0;

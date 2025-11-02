@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _LIBSSH2_PRIVKEY_SK
+internal unsafe struct _LIBSSH2_PRIVKEY_SK
 {
     public int algorithm;
 

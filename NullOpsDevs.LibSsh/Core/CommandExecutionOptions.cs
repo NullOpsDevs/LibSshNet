@@ -31,7 +31,7 @@ public class CommandExecutionOptions
     /// Gets or sets whether to request a pseudo-terminal (PTY) for the command.
     /// Default is false. Enable this for commands that need terminal features like color output or interactive input.
     /// </summary>
-    public bool RequestPty { get; set; } = false;
+    public bool RequestPty { get; set; }
 
     /// <summary>
     /// Gets or sets the terminal type when PTY is requested.
@@ -68,5 +68,5 @@ public class CommandExecutionOptions
     /// Default is null (uses empty modes). Only used when <see cref="RequestPty"/> is true.
     /// Use <see cref="TerminalModesBuilder"/> to construct custom terminal modes.
     /// </summary>
-    public byte[]? TerminalModes { get; set; } = null;
+    public byte[]? TerminalModes { get; set; }
 }

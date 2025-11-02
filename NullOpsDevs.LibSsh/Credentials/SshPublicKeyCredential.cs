@@ -13,7 +13,7 @@ namespace NullOpsDevs.LibSsh.Credentials;
 public class SshPublicKeyCredential(string username, string publicKeyPath, string privateKeyPath, string? passphrase = null) : SshCredential
 {
     /// <inheritdoc />
-    public override unsafe bool Authenticate(_LIBSSH2_SESSION* session)
+    public override unsafe bool Authenticate(SshSession session)
     {
         if (string.IsNullOrWhiteSpace(username))
             return false;
@@ -29,7 +29,7 @@ public class SshPublicKeyCredential(string username, string publicKeyPath, strin
 
         // Try without public key file first (let libssh2 extract it from private key)
         var authResult = LibSshNative.libssh2_userauth_publickey_fromfile_ex(
-            session,
+            session.SessionPtr,
             usernameBuffer.AsPointer<sbyte>(),
             (uint)usernameBuffer.Length - 1,
             null,
@@ -41,7 +41,7 @@ public class SshPublicKeyCredential(string username, string publicKeyPath, strin
         {
             using var publicKeyPathBuffer = NativeBuffer.Allocate(publicKeyPath);
             authResult = LibSshNative.libssh2_userauth_publickey_fromfile_ex(
-                session,
+                session.SessionPtr,
                 usernameBuffer.AsPointer<sbyte>(),
                 (uint)usernameBuffer.Length - 1,
                 publicKeyPathBuffer.AsPointer<sbyte>(),

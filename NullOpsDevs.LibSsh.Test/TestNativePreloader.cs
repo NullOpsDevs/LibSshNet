@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Runtime.InteropServices;
+using NullOpsDevs.LibSsh.Generated;
 using Spectre.Console;
 
 namespace NullOpsDevs.LibSsh.Test;
@@ -54,7 +55,7 @@ public static class NativePreloader
             _libraryHandle = NativeLibrary.Load(_libraryPath);
 
             // Set up the DllImport resolver for the LibSSH2 assembly
-            var libssh2Assembly = typeof(Generated.LibSshNative).Assembly;
+            var libssh2Assembly = typeof(LibSshNative).Assembly;
             NativeLibrary.SetDllImportResolver(libssh2Assembly, DllImportResolver);
 
             AnsiConsole.MarkupLine($"[green]Successfully loaded native library from: {_libraryPath}[/]");

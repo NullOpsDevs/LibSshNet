@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct libssh2_agent_publickey
+internal unsafe struct libssh2_agent_publickey
 {
     [NativeTypeName("unsigned int")]
     public uint magic;

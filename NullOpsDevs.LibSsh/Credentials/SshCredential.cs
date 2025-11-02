@@ -1,11 +1,9 @@
-﻿using NullOpsDevs.LibSsh.Generated;
-
-namespace NullOpsDevs.LibSsh.Credentials;
+﻿namespace NullOpsDevs.LibSsh.Credentials;
 
 /// <summary>
 /// Abstract base class for SSH authentication credentials.
 /// </summary>
-public abstract unsafe class SshCredential
+public abstract class SshCredential
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="SshCredential"/> class.
@@ -17,7 +15,7 @@ public abstract unsafe class SshCredential
     /// </summary>
     /// <param name="session">The libssh2 session pointer.</param>
     /// <returns>True if authentication succeeded; false otherwise.</returns>
-    public abstract bool Authenticate(_LIBSSH2_SESSION* session);
+    public abstract bool Authenticate(SshSession session);
 
     /// <summary>
     /// Creates a password-based SSH credential.

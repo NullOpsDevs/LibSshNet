@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public unsafe partial struct _LIBSSH2_USERAUTH_KBDINT_PROMPT
+internal unsafe struct _LIBSSH2_USERAUTH_KBDINT_PROMPT
 {
     [NativeTypeName("unsigned char *")]
     public byte* text;

@@ -15,13 +15,13 @@ namespace NullOpsDevs.LibSsh.Credentials;
 public class SshAgentCredential(string username) : SshCredential
 {
     /// <inheritdoc />
-    public override unsafe bool Authenticate(_LIBSSH2_SESSION* session)
+    public override unsafe bool Authenticate(SshSession session)
     {
         if (string.IsNullOrWhiteSpace(username))
             return false;
 
         // Initialize the agent
-        var agent = LibSshNative.libssh2_agent_init(session);
+        var agent = LibSshNative.libssh2_agent_init(session.SessionPtr);
         if (agent == null)
             return false;
 

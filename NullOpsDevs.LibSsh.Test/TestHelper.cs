@@ -1,6 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
-using NullOpsDevs.LibSsh.Core;
 using NullOpsDevs.LibSsh.Credentials;
 
 namespace NullOpsDevs.LibSsh.Test;

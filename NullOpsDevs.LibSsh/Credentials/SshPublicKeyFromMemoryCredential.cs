@@ -13,7 +13,7 @@ namespace NullOpsDevs.LibSsh.Credentials;
 public class SshPublicKeyFromMemoryCredential(string username, byte[] publicKeyData, byte[] privateKeyData, string? passphrase = null) : SshCredential
 {
     /// <inheritdoc />
-    public override unsafe bool Authenticate(_LIBSSH2_SESSION* session)
+    public override unsafe bool Authenticate(SshSession session)
     {
         if (string.IsNullOrWhiteSpace(username))
             return false;
@@ -33,7 +33,7 @@ public class SshPublicKeyFromMemoryCredential(string username, byte[] publicKeyD
             NativeBuffer.Allocate(passphrase);
 
         var authResult = LibSshNative.libssh2_userauth_publickey_frommemory(
-            session,
+            session.SessionPtr,
             usernameBuffer.AsPointer<sbyte>(),
             (nuint)usernameBuffer.Length - 1,
             publicKeyBuffer.AsPointer<sbyte>(),

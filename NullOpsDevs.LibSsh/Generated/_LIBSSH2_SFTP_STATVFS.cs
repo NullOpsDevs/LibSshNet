@@ -1,6 +1,6 @@
 namespace NullOpsDevs.LibSsh.Generated;
 
-public partial struct _LIBSSH2_SFTP_STATVFS
+internal struct _LIBSSH2_SFTP_STATVFS
 {
     [NativeTypeName("libssh2_uint64_t")]
     public ulong f_bsize;

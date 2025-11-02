@@ -1,5 +1,4 @@
 ﻿using JetBrains.Annotations;
-using Microsoft.Extensions.Logging;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Interop;
