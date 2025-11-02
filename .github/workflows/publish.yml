@@ -25,6 +25,15 @@ jobs:
     - name: Start Docker Compose services
       working-directory: ./src/NullOpsDevs.LibSsh.Test
       run: docker compose up -d
+      
+    - name: Setup SSH Agent
+      run: |
+        eval $(ssh-agent -s)
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+        cp src/NullOpsDevs.LibSsh.Test/docker/test-keys/id_rsa /tmp/id_rsa
+        chmod 600 /tmp/id_rsa
+        ssh-add /tmp/id_rsa
 
     - name: Build test project (Release)
       run: dotnet build -c Release --self-contained -r linux-x64 ./src/NullOpsDevs.LibSsh.Test/NullOpsDevs.LibSsh.Test.csproj
