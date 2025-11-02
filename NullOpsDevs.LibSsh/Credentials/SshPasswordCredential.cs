@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NullOpsDevs.LibSsh.Generated;
+using NullOpsDevs.LibSsh.Interop;
 
 namespace NullOpsDevs.LibSsh.Credentials;
 
@@ -16,20 +17,14 @@ public class SshPasswordCredential(string username, string password) : SshCreden
     {
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             return false;
-        
-        var usernameBuffer = Marshal.StringToHGlobalAnsi(username);
-        var passwordBuffer = Marshal.StringToHGlobalAnsi(password);
+
+        using var usernameBuffer = NativeBuffer.Allocate(username);
+        using var passwordBuffer = NativeBuffer.Allocate(password);
         
         var authResult = LibSshNative.libssh2_userauth_password_ex(
             session,
-            (sbyte*) usernameBuffer, (uint)username.Length,
-            (sbyte*) passwordBuffer, (uint)password.Length, null);
-        
-        Unsafe.InitBlockUnaligned(usernameBuffer.ToPointer(), 0, (uint)username.Length);
-        Unsafe.InitBlockUnaligned(passwordBuffer.ToPointer(), 0, (uint)username.Length);
-        
-        Marshal.FreeHGlobal(usernameBuffer);
-        Marshal.FreeHGlobal(passwordBuffer);
+            usernameBuffer.AsPointer<sbyte>(), (uint)usernameBuffer.Length,
+            passwordBuffer.AsPointer<sbyte>(), (uint)passwordBuffer.Length, null);
         
         return authResult >= 0;
     }

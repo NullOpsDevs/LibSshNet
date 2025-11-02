@@ -6,7 +6,7 @@ namespace NullOpsDevs.LibSsh.Core;
 
 [PublicAPI]
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-public enum HostKeyHashType
+public enum SshHashType
 {
     MD5 = LibSshNative.LIBSSH2_HOSTKEY_HASH_MD5,
     

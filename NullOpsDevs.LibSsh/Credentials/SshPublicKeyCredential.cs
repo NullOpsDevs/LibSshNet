@@ -36,8 +36,6 @@ public class SshPublicKeyCredential(string username, string publicKeyPath, strin
             privateKeyPathBuffer.AsPointer<sbyte>(),
             string.IsNullOrEmpty(passphrase) ? null : passphraseBuffer.AsPointer<sbyte>());
 
-        LibSsh2.Log($"Public key auth without pub file: result={authResult}");
-
         // If that fails and we have a public key path, try with explicit public key
         if (authResult < 0 && !string.IsNullOrWhiteSpace(publicKeyPath))
         {
@@ -49,8 +47,6 @@ public class SshPublicKeyCredential(string username, string publicKeyPath, strin
                 publicKeyPathBuffer.AsPointer<sbyte>(),
                 privateKeyPathBuffer.AsPointer<sbyte>(),
                 string.IsNullOrEmpty(passphrase) ? null : passphraseBuffer.AsPointer<sbyte>());
-
-            LibSsh2.Log($"Public key auth with pub file: result={authResult}");
         }
 
         return authResult >= 0;

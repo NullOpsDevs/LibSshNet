@@ -82,12 +82,54 @@ public static class Program
 
     private static async Task RunAuthenticationTests()
     {
+        await RunTest("Retrieve negotiated methods", RetrieveNegotiatedMethods);
         await RunTest("Host key retrival", TestHostKeyRetrival);
+        await RunTest("Host key hash retrival", TestHostKeyHashRetrival);
         await RunTest("Password Authentication", TestPasswordAuth);
         await RunTest("Public Key Authentication (no passphrase)", TestPublicKeyAuth);
         await RunTest("Public Key Authentication (with passphrase)", TestPublicKeyAuthWithPassphrase);
         await RunTest("Public Key from Memory", TestPublicKeyFromMemory);
         await RunTest("SSH Agent Authentication", TestSshAgentAuth);
+    }
+
+    private static Task<bool> RetrieveNegotiatedMethods()
+    {
+        using var session = TestHelper.CreateAndConnect();
+        
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderColor(Color.Blue)
+            .AddColumn(new TableColumn("[bold]Type[/]").Centered())
+            .AddColumn(new TableColumn("[bold]Negotiated[/]").Centered());
+        
+        foreach (var sshMethod in Enum.GetValues<SshMethod>())
+        {
+            var methods = "< not supported by sshlib2 >";
+
+            try
+            {
+                methods = session.GetNegotiatedMethod(sshMethod);
+            } catch { /* ignored */ }
+            
+            table.AddRow(sshMethod.ToString("G"), methods!);
+        }
+        
+        AnsiConsole.Write(table);
+        return Task.FromResult(true);
+    }
+
+    private static Task<bool> TestHostKeyRetrival()
+    {
+        using var session = TestHelper.CreateAndConnect();
+        var hostKey = session.GetHostKey();
+        return Task.FromResult(hostKey.Key.Length != 0 && hostKey.Type != SshHostKeyType.Unknown);
+    }
+
+    private static Task<bool> TestHostKeyHashRetrival()
+    {
+        using var session = TestHelper.CreateAndConnect();
+        var hostKey = session.GetHostKeyHash(SshHashType.SHA256);
+        return Task.FromResult(hostKey.Length == 32);
     }
 
     private static Task<bool> TestPasswordAuth()
@@ -160,13 +202,6 @@ public static class Program
             skippedTests++;
             return Task.FromResult(true);
         }
-    }
-    
-    private static Task<bool> TestHostKeyRetrival()
-    {
-        using var session = TestHelper.CreateAndConnect();
-        var hostKey = session.GetHostKeyHash(HostKeyHashType.SHA256);
-        return Task.FromResult(hostKey.Length == 32);
     }
 
     #endregion
@@ -512,6 +547,17 @@ public static class Program
         await RunTest("Empty file transfer", TestEmptyFileTransfer);
         await RunTest("Command with large output", TestLargeOutput);
         await RunTest("Multiple sequential operations", TestMultipleOperations);
+        await RunTest("Timeout test", TimeoutTest);
+    }
+
+    private static Task<bool> TimeoutTest()
+    {
+        var session = TestHelper.CreateConnectAndAuthenticate();
+        session.SetSessionTimeout(TimeSpan.FromMilliseconds(1));
+        
+        var result = session.ExecuteCommand("sleep 10");
+        
+        return Task.FromResult(result is { Successful: false });
     }
 
     private static Task<bool> TestEmptyFileTransfer()

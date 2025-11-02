@@ -78,8 +78,20 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+    
+    <!-- NuGet dependencies -->
     <ItemGroup>
       <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" PrivateAssets="All" />
+    </ItemGroup>
+    
+    <!-- NET8 dependencies -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    </ItemGroup>
+
+    <!-- NET9 dependencies -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
     </ItemGroup>
 
     <ItemGroup>

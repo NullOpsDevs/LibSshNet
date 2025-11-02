@@ -27,8 +27,6 @@ public class SshException(string message, SshError error, Exception? innerExcept
             ? Marshal.PtrToStringAnsi((IntPtr)errorMsg, errorMsgLen) 
             : "Unknown error";
         
-        return new SshException(
-            $"Failed to create SCP channel: [{(SshError)errorCode:G}] {errorText}", 
-            (SshError) errorCode);
+        return new SshException($"[{(SshError)errorCode:G}] {errorText}", (SshError) errorCode);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using JetBrains.Annotations;
+using Microsoft.Extensions.Logging;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Interop;
@@ -22,18 +23,4 @@ public static class LibSsh2
 #else
     public static readonly object GlobalLock = new();
 #endif
-
-    /// <summary>
-    /// Gets or sets the global logger action for libssh2 operations.
-    /// </summary>
-    public static Action<string>? GlobalLogger;
-
-    /// <summary>
-    /// Logs a message using the configured <see cref="GlobalLogger"/> if available.
-    /// </summary>
-    /// <param name="message">The message to log.</param>
-    public static void Log(string message)
-    {
-        GlobalLogger?.Invoke(message);
-    }
 }

@@ -1,6 +1,8 @@
 ﻿using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
+using Microsoft.Extensions.Logging;
+using NullOpsDevs.LibSsh.Core;
 using NullOpsDevs.LibSsh.Credentials;
 using NullOpsDevs.LibSsh.Exceptions;
 using NullOpsDevs.LibSsh.Extensions;
@@ -10,13 +12,13 @@ using NullOpsDevs.LibSsh.Platform;
 using NullOpsDevs.LibSsh.Terminal;
 using static NullOpsDevs.LibSsh.Generated.LibSshNative;
 
-namespace NullOpsDevs.LibSsh.Core;
+namespace NullOpsDevs.LibSsh;
 
 /// <summary>
 /// Represents an SSH session for connecting to and communicating with remote SSH servers.
 /// </summary>
 [PublicAPI]
-public sealed class SshSession : IDisposable
+public sealed class SshSession(ILogger? logger = null) : IDisposable
 {
     private static bool libraryInitialized;
     
@@ -34,17 +36,17 @@ public sealed class SshSession : IDisposable
     /// </summary>
     public SshConnectionStatus ConnectionStatus { get; private set; }
 
-    private static void EnsureInitialized()
+    private void EnsureInitialized()
     {
         lock (LibSsh2.GlobalLock)
         {
             if(libraryInitialized)
                 return;
             
-            LibSsh2.Log("Initializing library");
+            logger?.LogDebug("Initializing libssh2 library");
 
             var initResult = libssh2_init(0);
-            LibSsh2.Log($"libssh2_init returned: {initResult}");
+            logger?.LogDebug("libssh2_init returned: {InitResult}", initResult);
             
             initResult.ThrowIfNotSuccessful("LibSSH2 initialization failed");
             libraryInitialized = true;
@@ -93,7 +95,7 @@ public sealed class SshSession : IDisposable
 
             try
             {
-                LibSsh2.Log($"Connecting to server: '{host}:{port}'...");
+                logger?.LogDebug("Connecting to server: '{Host}:{Port}'...", host, port);
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 socket.Connect(host, port);
             }
@@ -103,8 +105,8 @@ public sealed class SshSession : IDisposable
                 throw ex.AsSshException();
             }
 
-            LibSsh2.Log($"Connected to server: '{host}:{port}'");
-            LibSsh2.Log("Handshaking...");
+            logger?.LogDebug("Connected to server: '{Host}:{Port}'", host, port);
+            logger?.LogDebug("Handshaking...");
 
             var result = libssh2_session_handshake(newSession, (ulong)socket.Handle);
 
@@ -120,21 +122,100 @@ public sealed class SshSession : IDisposable
             session = newSession;
         }
     }
+    
+    public unsafe SshHostKey GetHostKey()
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
 
-    public unsafe byte[] GetHostKeyHash(HostKeyHashType keyHashType)
+        UIntPtr length = 0;
+        var type = 0;
+        
+        var ptr = libssh2_session_hostkey(session, &length, &type);
+        
+        if (ptr == null || length == 0)
+            throw SshException.FromLastSessionError(session);
+        
+        var buffer = new byte[length];
+        Marshal.Copy(new IntPtr(ptr), buffer, 0, (int) length);
+
+        return new SshHostKey
+        {
+            Key = buffer,
+            Type = (SshHostKeyType)type
+        };
+    }
+
+    public unsafe string? GetNegotiatedMethod(SshMethod method)
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+        
+        if(!Enum.IsDefined(method))
+            throw new ArgumentOutOfRangeException(nameof(method), method, null);
+        
+        var result = libssh2_session_methods(session, (int) method);
+        
+        if(result == null)
+            throw SshException.FromLastSessionError(session);
+
+        return Marshal.PtrToStringAnsi(new IntPtr(result));
+    }
+    
+    public unsafe void SetMethodPreferences(SshMethod method, string preferences)
+    {
+        EnsureInitialized();
+        EnsureInStatus(SshConnectionStatus.Disconnected);
+        
+        using var preferencesBuffer = NativeBuffer.Allocate(preferences);
+        
+        var result = libssh2_session_method_pref(session, (int) method, preferencesBuffer.AsPointer<sbyte>());
+        result.ThrowIfNotSuccessful("Failed to set preferences");
+    }
+
+    public void SetSecureMethodPreferences()
+    {
+        SetMethodPreferences(SshMethod.Kex, "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256");
+        SetMethodPreferences(SshMethod.HostKey, "ssh-ed25519,ecdsa-sha2-nistp521,ecdsa-sha2-nistp384,ecdsa-sha2-nistp256,rsa-sha2-512,rsa-sha2-256");
+        SetMethodPreferences(SshMethod.CryptCs, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr");
+        SetMethodPreferences(SshMethod.CryptSc, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr");
+        SetMethodPreferences(SshMethod.MacCs, "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512");
+        SetMethodPreferences(SshMethod.MacSc, "hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha2-256,hmac-sha2-512");
+        SetMethodPreferences(SshMethod.CompCs, "none");
+        SetMethodPreferences(SshMethod.CompSc, "none");
+    }
+
+    public unsafe void DisableSessionTimeout() => libssh2_session_set_timeout(session, 0);
+
+    public unsafe void SetSessionTimeout(TimeSpan timeout)
+    {
+        if (timeout < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout must be greater than zero");
+        
+        if(timeout.TotalMilliseconds > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout cannot be greater than ");
+        
+        libssh2_session_set_timeout(session, (int) timeout.TotalMilliseconds);
+    }
+
+    public unsafe byte[] GetHostKeyHash(SshHashType keyHashType)
     {
         EnsureInitialized();
         EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
         
         var keySize = keyHashType switch
         {
-            HostKeyHashType.MD5 => 16,
-            HostKeyHashType.SHA1 => 20,
-            HostKeyHashType.SHA256 => 32,
+            SshHashType.MD5 => 16,
+            SshHashType.SHA1 => 20,
+            SshHashType.SHA256 => 32,
             _ => throw new ArgumentOutOfRangeException(nameof(keyHashType), keyHashType, null)
         };
         
         var hash = libssh2_hostkey_hash(session, (int) keyHashType);
+
+        if (hash == null)
+            throw SshException.FromLastSessionError(session);
+        
         var keyHash = new byte[keySize];
         Marshal.Copy(new IntPtr(hash), keyHash, 0, keySize);
         
@@ -176,7 +257,8 @@ public sealed class SshSession : IDisposable
         
         options ??= CommandExecutionOptions.Default;
 
-        LibSsh2.Log($"Opening channel for command execution: '{command}'");
+        logger?.LogDebug("Opening channel for command execution: '{Command}'", command);
+        
         var channel = libssh2_channel_open_ex(
             session,
             StringPointers.Session,
@@ -189,16 +271,17 @@ public sealed class SshSession : IDisposable
 
         if (channel == null)
         {
-            LibSsh2.Log("Failed to open channel");
+            logger?.LogDebug("Failed to open channel");
             return SshCommandResult.Unsuccessful;
         }
 
-        LibSsh2.Log("Channel opened successfully");
+        logger?.LogDebug("Channel opened successfully");
 
         // Request PTY if specified
         if (options.RequestPty)
         {
-            LibSsh2.Log($"Requesting PTY (type: {options.TerminalType}, size: {options.TerminalWidth}x{options.TerminalHeight})");
+            logger?.LogDebug("Requesting PTY (type: {OptionsTerminalType}, size: {OptionsTerminalWidth}x{OptionsTerminalHeight})", options.TerminalType, options.TerminalWidth, options.TerminalHeight);
+            
             var terminalType = options.TerminalType.ToLibSsh2String();
             var terminalModes = options.TerminalModes ?? TerminalModesBuilder.Empty;
 
@@ -224,10 +307,10 @@ public sealed class SshSession : IDisposable
                 libssh2_channel_free(channel);
             });
 
-            LibSsh2.Log("PTY requested successfully");
+            logger?.LogDebug("PTY requested successfully");
         }
 
-        LibSsh2.Log("Starting command process execution");
+        logger?.LogDebug("Starting command process execution");
         using var commandBytes = NativeBuffer.Allocate(command);
 
         var processStartupResult = libssh2_channel_process_startup(
@@ -245,22 +328,22 @@ public sealed class SshSession : IDisposable
             libssh2_channel_free(channel);
         });
 
-        LibSsh2.Log("Command process started, reading output");
+        logger?.LogDebug("Command process started, reading output");
         var stdout = ChannelReader.ReadUtf8String(channel, ChannelReader.StdoutStreamId, cancellationToken);
-        LibSsh2.Log($"Read {stdout.Length} bytes from stdout");
+        logger?.LogDebug("Read {StdoutLength} bytes from stdout", stdout.Length);
 
         var stderr = ChannelReader.ReadUtf8String(channel, ChannelReader.StderrStreamId, cancellationToken);
-        LibSsh2.Log($"Read {stderr.Length} bytes from stderr");
+        logger?.LogDebug("Read {StderrLength} bytes from stderr", stderr.Length);
 
-        LibSsh2.Log("Closing channel");
+        logger?.LogDebug("Closing channel");
         libssh2_channel_close(channel);
         libssh2_channel_wait_closed(channel);
 
-        LibSsh2.Log("Retrieving exit status");
+        logger?.LogDebug("Retrieving exit status");
         var exitStatus = libssh2_channel_get_exit_status(channel);
-        LibSsh2.Log($"Command exit status: {exitStatus}");
+        logger?.LogDebug("Command exit status: {ExitStatus}", exitStatus);
 
-        LibSsh2.Log("Retrieving exit signal");
+        logger?.LogDebug("Retrieving exit signal");
         sbyte* exitSignalPtr = null;
         nuint exitSignalLen = 0;
         var exitSignalResult = libssh2_channel_get_exit_signal(channel, &exitSignalPtr, &exitSignalLen, null, null, null, null);
@@ -269,15 +352,15 @@ public sealed class SshSession : IDisposable
         if (exitSignalResult == 0 && exitSignalPtr != null && exitSignalLen > 0)
         {
             exitSignal = Marshal.PtrToStringUTF8((IntPtr)exitSignalPtr, (int)exitSignalLen);
-            LibSsh2.Log($"Command exit signal: {exitSignal}");
+            logger?.LogDebug("Command exit signal: {ExitSignal}", exitSignal);
         }
         else
         {
-            LibSsh2.Log("No exit signal");
+            logger?.LogDebug("No exit signal");
         }
 
         libssh2_channel_free(channel);
-        LibSsh2.Log("Channel closed");
+        logger?.LogDebug("Channel closed");
 
         return new SshCommandResult
         {
@@ -324,11 +407,11 @@ public sealed class SshSession : IDisposable
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.LoggedIn);
         
-        LibSsh2.Log($"Starting SCP download of file: '{path}'");
+        logger?.LogDebug("Starting SCP download of file: '{Path}'", path);
         using var remotePathBuffer = NativeBuffer.Allocate(path);
         using var statBuffer = NativeBuffer.Allocate(512);
 
-        LibSsh2.Log("Opening SCP receive channel");
+        logger?.LogDebug("Opening SCP receive channel");
         var scpChannel = libssh2_scp_recv2(
             session,
             remotePathBuffer.AsPointer<sbyte>(),
@@ -336,31 +419,31 @@ public sealed class SshSession : IDisposable
 
         if (scpChannel == null)
         {
-            LibSsh2.Log("Failed to open SCP receive channel");
+            logger?.LogDebug("Failed to open SCP receive channel");
             throw SshException.FromLastSessionError(session);
         }
 
-        LibSsh2.Log("SCP receive channel opened successfully");
+        logger?.LogDebug("SCP receive channel opened successfully");
 
         try
         {
             var stat = PlatformInDependentStat.From(statBuffer.AsPointer());
-            LibSsh2.Log($"Remote file size: {stat.FileSize} bytes");
+            logger?.LogDebug("Remote file size: {StatFileSize} bytes", stat.FileSize);
 
-            LibSsh2.Log($"Starting file transfer (buffer size: {bufferSize})");
+            logger?.LogDebug("Starting file transfer (buffer size: {BufferSize})", bufferSize);
             var totalReceived = ChannelReader.CopyToStream(scpChannel, ChannelReader.StdoutStreamId, destination, bufferSize, (int) stat.FileSize, cancellationToken);
-            LibSsh2.Log($"Transfer complete. Received {totalReceived}/{stat.FileSize} bytes");
+            logger?.LogDebug("Transfer complete. Received {TotalReceived}/{StatFileSize} bytes", totalReceived, stat.FileSize);
 
             return totalReceived == stat.FileSize;
         }
         finally
         {
-            LibSsh2.Log("Closing SCP channel");
+            logger?.LogDebug("Closing SCP channel");
             libssh2_channel_send_eof(scpChannel);
             libssh2_channel_wait_eof(scpChannel);
             libssh2_channel_wait_closed(scpChannel);
             libssh2_channel_free(scpChannel);
-            LibSsh2.Log("SCP channel closed");
+            logger?.LogDebug("SCP channel closed");
         }
     }
 
@@ -403,7 +486,7 @@ public sealed class SshSession : IDisposable
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.LoggedIn);
         
-        LibSsh2.Log($"Starting SCP upload to file: '{path}'");
+        logger?.LogDebug("Starting SCP upload to file: '{Path}'", path);
 
         if (!source.CanRead)
             throw new ArgumentException("Source stream must be readable", nameof(source));
@@ -412,11 +495,11 @@ public sealed class SshSession : IDisposable
             throw new ArgumentException("Source stream must be seekable", nameof(source));
 
         var fileSize = source.Length - source.Position;
-        LibSsh2.Log($"File size to upload: {fileSize} bytes, mode: {mode}");
+        logger?.LogDebug("File size to upload: {FileSize} bytes, mode: {Mode}", fileSize, mode);
 
         using var remotePathBuffer = NativeBuffer.Allocate(path);
 
-        LibSsh2.Log("Opening SCP send channel");
+        logger?.LogDebug("Opening SCP send channel");
         var scpChannel = libssh2_scp_send64(
             session,
             remotePathBuffer.AsPointer<sbyte>(),
@@ -427,28 +510,28 @@ public sealed class SshSession : IDisposable
 
         if (scpChannel == null)
         {
-            LibSsh2.Log("Failed to open SCP send channel");
+            logger?.LogDebug("Failed to open SCP send channel");
             throw SshException.FromLastSessionError(session);
         }
 
-        LibSsh2.Log("SCP send channel opened successfully");
+        logger?.LogDebug("SCP send channel opened successfully");
 
         try
         {
-            LibSsh2.Log($"Starting file transfer (buffer size: {bufferSize})");
+            logger?.LogDebug("Starting file transfer (buffer size: {BufferSize})", bufferSize);
             var totalSent = ChannelReader.CopyToChannel(scpChannel, ChannelReader.StdoutStreamId, source, fileSize, bufferSize, cancellationToken);
-            LibSsh2.Log($"Transfer complete. Sent {totalSent}/{fileSize} bytes");
+            logger?.LogDebug("Transfer complete. Sent {TotalSent}/{FileSize} bytes", totalSent, fileSize);
 
             return totalSent == fileSize;
         }
         finally
         {
-            LibSsh2.Log("Closing SCP channel");
+            logger?.LogDebug("Closing SCP channel");
             libssh2_channel_send_eof(scpChannel);
             libssh2_channel_wait_eof(scpChannel);
             libssh2_channel_wait_closed(scpChannel);
             libssh2_channel_free(scpChannel);
-            LibSsh2.Log("SCP channel closed");
+            logger?.LogDebug("SCP channel closed");
         }
     }
 
@@ -488,17 +571,17 @@ public sealed class SshSession : IDisposable
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.Connected);
 
-        LibSsh2.Log($"Starting authentication with credential type: {credential.GetType().Name}");
+        logger?.LogDebug("Starting authentication with credential type: {Name}", credential.GetType().Name);
         var result = credential.Authenticate(session);
 
         if (result)
         {
-            LibSsh2.Log("Authentication successful");
+            logger?.LogDebug("Authentication successful");
             ConnectionStatus = SshConnectionStatus.LoggedIn;
         }
         else
         {
-            LibSsh2.Log("Authentication failed");
+            logger?.LogDebug("Authentication failed");
         }
 
         return result;
@@ -530,13 +613,13 @@ public sealed class SshSession : IDisposable
             return "Session is null";
 
         sbyte* errorMsg = null;
-        int errorMsgLen = 0;
-        var errorCode = LibSshNative.libssh2_session_last_error(session, &errorMsg, &errorMsgLen, 0);
+        var errorMsgLen = 0;
+        var errorCode = libssh2_session_last_error(session, &errorMsg, &errorMsgLen, 0);
 
         if (errorCode == 0 || errorMsg == null)
             return "No error";
 
-        return System.Runtime.InteropServices.Marshal.PtrToStringUTF8((IntPtr)errorMsg) ?? "Unknown error";
+        return Marshal.PtrToStringUTF8((IntPtr)errorMsg) ?? "Unknown error";
     }
 
     /// <inheritdoc />

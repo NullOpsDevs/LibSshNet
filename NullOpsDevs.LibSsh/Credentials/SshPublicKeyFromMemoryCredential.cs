@@ -27,9 +27,10 @@ public class SshPublicKeyFromMemoryCredential(string username, byte[] publicKeyD
         using var usernameBuffer = NativeBuffer.Allocate(username);
         using var publicKeyBuffer = NativeBuffer.Allocate(publicKeyData);
         using var privateKeyBuffer = NativeBuffer.Allocate(privateKeyData);
-        using var passphraseBuffer = string.IsNullOrEmpty(passphrase)
-            ? NativeBuffer.Allocate(0)
-            : NativeBuffer.Allocate(passphrase);
+        
+        using var passphraseBuffer = string.IsNullOrEmpty(passphrase) ?
+            NativeBuffer.Allocate(0) :
+            NativeBuffer.Allocate(passphrase);
 
         var authResult = LibSshNative.libssh2_userauth_publickey_frommemory(
             session,
