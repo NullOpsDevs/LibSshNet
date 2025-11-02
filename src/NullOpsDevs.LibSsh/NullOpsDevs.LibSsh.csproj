@@ -20,6 +20,8 @@
         <RepositoryUrl>https://github.com/NullOpsDevs/LibSshNet</RepositoryUrl>
         <PackageProjectUrl>https://github.com/NullOpsDevs/LibSshNet</PackageProjectUrl>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>logo.png</PackageIcon>
     </PropertyGroup>
     
     <!-- NuGet build settings -->
@@ -36,6 +38,11 @@
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
     </PropertyGroup>
 
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+        <None Include="..\..\icons\logo.png" Pack="true" PackagePath="\" />
+    </ItemGroup>
+    
     <!-- Include native libraries for different platforms -->
     <ItemGroup>
         <!-- Windows x64 -->
