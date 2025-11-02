@@ -18,8 +18,6 @@ public static class TestConfig
     public const string PublicKeyPath = "docker/test-keys/id_rsa.pub";
     public const string PrivateKeyProtectedPath = "docker/test-keys/id_rsa_protected";
     public const string PublicKeyProtectedPath = "docker/test-keys/id_rsa_protected.pub";
-    public const string Ed25519PrivateKeyPath = "docker/test-keys/id_ed25519";
-    public const string Ed25519PublicKeyPath = "docker/test-keys/id_ed25519.pub";
     public const string KeyPassphrase = "testpass";
 
     // Test file paths (remote paths on SSH server)

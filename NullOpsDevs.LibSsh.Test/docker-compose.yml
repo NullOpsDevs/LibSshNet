@@ -31,26 +31,3 @@ services:
              cp /tmp/setup.sh /custom-cont-init.d/setup.sh &&
              chmod +x /custom-cont-init.d/setup.sh &&
              exec /init"
-
-  ssh-agent:
-    image: alpine:latest
-    container_name: libssh-test-agent
-    volumes:
-      - ./docker/test-keys:/keys:ro
-      - ./docker/setup-ssh-agent.sh:/setup-ssh-agent-src.sh:ro
-      - ssh-agent-socket:/ssh-agent
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "test", "-S", "/ssh-agent/socket"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    entrypoint: >
-      sh -c "apk add --no-cache dos2unix &&
-             cp /setup-ssh-agent-src.sh /tmp/setup.sh &&
-             dos2unix /tmp/setup.sh &&
-             chmod +x /tmp/setup.sh &&
-             /bin/sh /tmp/setup.sh"
-
-volumes:
-  ssh-agent-socket:

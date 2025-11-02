@@ -32,38 +32,6 @@ public static class TestHelper
     }
 
     /// <summary>
-    /// Compares two streams for equality
-    /// </summary>
-    public static bool StreamsAreEqual(Stream stream1, Stream stream2)
-    {
-        stream1.Position = 0;
-        stream2.Position = 0;
-
-        if (stream1.Length != stream2.Length)
-            return false;
-
-        var buffer1 = new byte[4096];
-        var buffer2 = new byte[4096];
-
-        while (true)
-        {
-            var read1 = stream1.Read(buffer1, 0, buffer1.Length);
-            var read2 = stream2.Read(buffer2, 0, buffer2.Length);
-
-            if (read1 != read2)
-                return false;
-
-            if (read1 == 0)
-                break;
-
-            if (!buffer1.AsSpan(0, read1).SequenceEqual(buffer2.AsSpan(0, read2)))
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Computes SHA256 hash of a stream
     /// </summary>
     public static string GetStreamHash(Stream stream)
@@ -96,23 +64,6 @@ public static class TestHelper
         }
 
         return path;
-    }
-
-    /// <summary>
-    /// Generates random text content
-    /// </summary>
-    public static string GenerateRandomText(int length)
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        var random = new Random();
-        var sb = new StringBuilder(length);
-
-        for (int i = 0; i < length; i++)
-        {
-            sb.Append(chars[random.Next(chars.Length)]);
-        }
-
-        return sb.ToString();
     }
 
     /// <summary>
