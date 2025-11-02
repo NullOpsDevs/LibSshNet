@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Credentials;
@@ -23,6 +24,9 @@ public class SshPasswordCredential(string username, string password) : SshCreden
             session,
             (sbyte*) usernameBuffer, (uint)username.Length,
             (sbyte*) passwordBuffer, (uint)password.Length, null);
+        
+        Unsafe.InitBlockUnaligned(usernameBuffer.ToPointer(), 0, (uint)username.Length);
+        Unsafe.InitBlockUnaligned(passwordBuffer.ToPointer(), 0, (uint)username.Length);
         
         Marshal.FreeHGlobal(usernameBuffer);
         Marshal.FreeHGlobal(passwordBuffer);

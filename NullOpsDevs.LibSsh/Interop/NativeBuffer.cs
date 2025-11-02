@@ -45,7 +45,11 @@ internal readonly ref struct NativeBuffer(IntPtr pointer, int length) : IDisposa
     public unsafe T* AsPointer<T>() where T : unmanaged => (T*)Pointer.ToPointer();
 
     /// <inheritdoc />
-    public void Dispose() => Marshal.FreeHGlobal(Pointer);
+    public unsafe void Dispose()
+    {
+        Unsafe.InitBlockUnaligned(AsPointer(), 0, (uint)Length);
+        Marshal.FreeHGlobal(Pointer);
+    }
 
     /// <summary>
     /// Allocates a native buffer of the specified length.

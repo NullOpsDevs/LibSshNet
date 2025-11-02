@@ -82,11 +82,12 @@ public static class Program
 
     private static async Task RunAuthenticationTests()
     {
+        await RunTest("Host key retrival", TestHostKeyRetrival);
         await RunTest("Password Authentication", TestPasswordAuth);
         await RunTest("Public Key Authentication (no passphrase)", TestPublicKeyAuth);
         await RunTest("Public Key Authentication (with passphrase)", TestPublicKeyAuthWithPassphrase);
         await RunTest("Public Key from Memory", TestPublicKeyFromMemory);
-        // await RunTest("SSH Agent Authentication", TestSshAgentAuth);
+        await RunTest("SSH Agent Authentication", TestSshAgentAuth);
     }
 
     private static Task<bool> TestPasswordAuth()
@@ -159,6 +160,13 @@ public static class Program
             skippedTests++;
             return Task.FromResult(true);
         }
+    }
+    
+    private static Task<bool> TestHostKeyRetrival()
+    {
+        using var session = TestHelper.CreateAndConnect();
+        var hostKey = session.GetHostKeyHash(HostKeyHashType.SHA256);
+        return Task.FromResult(hostKey.Length == 32);
     }
 
     #endregion

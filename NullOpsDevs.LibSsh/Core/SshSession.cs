@@ -57,6 +57,17 @@ public sealed class SshSession : IDisposable
             throw new SshException($"SshConnection must be in status '{status:G}' to perform that operation.", SshError.DevWrongUse);
     }
     
+    private void EnsureInStatuses(params SshConnectionStatus[] statuses)
+    {
+        foreach (var status in statuses)
+        {
+            if (ConnectionStatus == status)
+                return;
+        }
+        
+        throw new SshException($"SshConnection must be in one of the statuses '{string.Join(", ", statuses.Select(s => $"{s:G}"))}' to perform that operation.", SshError.DevWrongUse);
+    }
+    
     /// <summary>
     /// Connects to an SSH server at the specified host and port.
     /// </summary>
@@ -110,6 +121,26 @@ public sealed class SshSession : IDisposable
         }
     }
 
+    public unsafe byte[] GetHostKeyHash(HostKeyHashType keyHashType)
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+        
+        var keySize = keyHashType switch
+        {
+            HostKeyHashType.MD5 => 16,
+            HostKeyHashType.SHA1 => 20,
+            HostKeyHashType.SHA256 => 32,
+            _ => throw new ArgumentOutOfRangeException(nameof(keyHashType), keyHashType, null)
+        };
+        
+        var hash = libssh2_hostkey_hash(session, (int) keyHashType);
+        var keyHash = new byte[keySize];
+        Marshal.Copy(new IntPtr(hash), keyHash, 0, keySize);
+        
+        return keyHash;
+    }
+
     /// <summary>
     /// Asynchronously connects to an SSH server at the specified host and port.
     /// </summary>
@@ -140,6 +171,9 @@ public sealed class SshSession : IDisposable
     /// </remarks>
     public unsafe SshCommandResult ExecuteCommand(string command, CommandExecutionOptions? options = null, CancellationToken cancellationToken = default)
     {
+        EnsureInitialized();
+        EnsureInStatus(SshConnectionStatus.LoggedIn);
+        
         options ??= CommandExecutionOptions.Default;
 
         LibSsh2.Log($"Opening channel for command execution: '{command}'");
@@ -287,6 +321,9 @@ public sealed class SshSession : IDisposable
     /// </remarks>
     public unsafe bool ReadFile(string path, Stream destination, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
+        EnsureInitialized();
+        EnsureInStatus(SshConnectionStatus.LoggedIn);
+        
         LibSsh2.Log($"Starting SCP download of file: '{path}'");
         using var remotePathBuffer = NativeBuffer.Allocate(path);
         using var statBuffer = NativeBuffer.Allocate(512);
@@ -363,6 +400,9 @@ public sealed class SshSession : IDisposable
     /// </remarks>
     public unsafe bool WriteFile(string path, Stream source, int mode = 420, int bufferSize = 32768, CancellationToken cancellationToken = default)
     {
+        EnsureInitialized();
+        EnsureInStatus(SshConnectionStatus.LoggedIn);
+        
         LibSsh2.Log($"Starting SCP upload to file: '{path}'");
 
         if (!source.CanRead)
