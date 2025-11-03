@@ -1,0 +1,38 @@
+name: Build and deploy docs
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-workflow.yml'
+
+env:
+  WRITERSIDE_VERSION: "2025.04.8412"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build docs
+        run: >
+          docker run --rm -v ${{ github.workspace }}:/opt/sources
+          -e SOURCE_DIR=/opt/sources/docs/
+          -e MODULE_INSTANCE=Writerside/main
+          -e OUTPUT_DIR=/opt/sources/output
+          -e RUNNER=other
+          jetbrains/writerside-builder:${{ env.WRITERSIDE_VERSION }}
+
+      - name: Extract built docs
+        run: |
+          mkdir -p deploy
+          unzip output/webHelpMAIN2-all.zip -d deploy
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy deploy --project-name=nullopsdevs-libsshnet --branch=main
