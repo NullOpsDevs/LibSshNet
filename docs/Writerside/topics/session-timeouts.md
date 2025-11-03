@@ -194,7 +194,7 @@ These are different mechanisms with different purposes:
 | **Error on failure** | `SshError.Timeout` exception | Connection drops |
 | **Configuration** | `SetSessionTimeout()` | `ConfigureKeepAlive()` + `SendKeepAlive()` |
 
-## Using Both Together
+## Using Both Together {id="keepalive"}
 
 For robust connection management, use both timeouts and keepalives:
 

@@ -16,6 +16,8 @@
             <showDownloadButton>true</showDownloadButton>
             
             <content-max-width>1400</content-max-width>
+
+            <ignore-problems>VIS011</ignore-problems>
         </variables>
         
         <footer>
