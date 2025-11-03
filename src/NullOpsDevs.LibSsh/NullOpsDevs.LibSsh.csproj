@@ -137,6 +137,11 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
     </ItemGroup>
 
+    <!-- NET10 dependencies -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0-preview.1.25080.5" />
+    </ItemGroup>
+
     <ItemGroup>
       <InternalsVisibleTo Include="NullOpsDevs.LibSsh.Test"  />
     </ItemGroup>
