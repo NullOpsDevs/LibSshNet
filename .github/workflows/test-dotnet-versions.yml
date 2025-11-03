@@ -1,0 +1,70 @@
+name: Test .NET Versions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-dotnet-versions:
+    name: Test on ${{ matrix.target-framework }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target-framework: net6.0
+            dotnet-version: '6.0.x'
+          - target-framework: net7.0
+            dotnet-version: '7.0.x'
+          - target-framework: net8.0
+            dotnet-version: '8.0.x'
+          - target-framework: net9.0
+            dotnet-version: '9.0.x'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET ${{ matrix.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
+
+    - name: Start Docker Compose services
+      working-directory: ./src/NullOpsDevs.LibSsh.Test
+      run: docker compose up --build -d
+
+    - name: Wait for SSH server to be ready
+      run: |
+        echo "Waiting for SSH server to start..."
+        sleep 5
+
+    - name: Setup SSH Agent
+      run: |
+        eval $(ssh-agent -s)
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+        cp src/NullOpsDevs.LibSsh.Test/docker/test-keys/id_rsa /tmp/id_rsa
+        chmod 600 /tmp/id_rsa
+        ssh-add /tmp/id_rsa
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build library for ${{ matrix.target-framework }}
+      run: dotnet build -c Release --no-restore -f ${{ matrix.target-framework }}
+
+    - name: Build test project for ${{ matrix.target-framework }}
+      run: dotnet build -c Release --self-contained -r linux-x64 -f ${{ matrix.target-framework }} ./src/NullOpsDevs.LibSsh.Test/NullOpsDevs.LibSsh.Test.csproj
+
+    - name: Run tests
+      working-directory: ./src/NullOpsDevs.LibSsh.Test/bin/Release/${{ matrix.target-framework }}/linux-x64/
+      run: ./NullOpsDevs.LibSsh.Test
+
+    - name: Cleanup Docker Compose
+      if: always()
+      working-directory: ./src/NullOpsDevs.LibSsh.Test
+      run: docker compose down -v
