@@ -7,6 +7,7 @@ A modern, cross-platform .NET library providing managed bindings for libssh2, en
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
+[![Documentation](https://img.shields.io/badge/Documentation-blue)](https://libsshnet.nullops.systems/quickstart)
 
 ## Features
 
@@ -75,7 +76,7 @@ Install-Package NullOpsDevs.LibSsh
 
 ## Quick Start
 
-For a quick start, I'd suggest looking into the [NullOpsDevs.LibSsh.Test](NullOpsDevs.LibSsh.Test) project.
+Quickstart guide is available [here](https://libsshnet.nullops.systems/quickstart).
 
 ## Building from Source
 
