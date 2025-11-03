@@ -1,0 +1,374 @@
+﻿# Command Execution
+
+Execute commands on remote SSH servers and retrieve their output, exit codes, and error messages. NullOpsDevs.LibSsh makes it simple to run commands remotely and process their results.
+
+## Basic Command Execution
+
+Execute a simple command and get the result:
+
+```c#
+using NullOpsDevs.LibSsh;
+using NullOpsDevs.LibSsh.Credentials;
+
+var session = new SshSession();
+session.Connect("example.com", 22);
+session.Authenticate(SshCredential.FromPassword("user", "password"));
+
+// Execute a command
+var result = session.ExecuteCommand("ls -la /home/user");
+
+Console.WriteLine("Output:");
+Console.WriteLine(result.Stdout);
+
+Console.WriteLine($"Exit code: {result.ExitCode}");
+```
+
+## Understanding Command Results
+
+The `SshCommandResult` structure contains all information about the command execution:
+
+```c#
+var result = session.ExecuteCommand("whoami");
+
+// Standard output (stdout)
+Console.WriteLine($"Output: {result.Stdout}");
+
+// Standard error (stderr)
+if (!string.IsNullOrEmpty(result.Stderr))
+{
+    Console.WriteLine($"Errors: {result.Stderr}");
+}
+
+// Exit code (0 typically means success)
+if (result.ExitCode == 0)
+{
+    Console.WriteLine("Command succeeded!");
+}
+else
+{
+    Console.WriteLine($"Command failed with exit code: {result.ExitCode}");
+}
+
+// Exit signal (if the command was terminated by a signal)
+if (result.ExitSignal != null)
+{
+    Console.WriteLine($"Terminated by signal: {result.ExitSignal}");
+}
+
+// Overall success indicator
+if (result.Successful)
+{
+    Console.WriteLine("Execution was successful");
+}
+```
+
+## Async Command Execution
+
+For non-blocking operations, use the async version:
+
+```c#
+var result = await session.ExecuteCommandAsync("apt update", cancellationToken: cancellationToken);
+Console.WriteLine(result.Stdout);
+```
+
+## Handling Command Errors
+
+Always check the exit code to determine if a command succeeded:
+
+```c#
+var result = session.ExecuteCommand("cat /nonexistent/file");
+
+if (result.ExitCode != 0)
+{
+    Console.WriteLine("Command failed!");
+    Console.WriteLine($"Exit code: {result.ExitCode}");
+    Console.WriteLine($"Error output: {result.Stderr}");
+}
+else
+{
+    Console.WriteLine(result.Stdout);
+}
+```
+
+## Commands Requiring PTY (Pseudo-Terminal)
+
+Some commands need a pseudo-terminal to work correctly. Enable PTY when:
+- Commands check for terminal presence
+- You need ANSI color output and terminal control codes
+- Programs behave differently when attached to a terminal
+
+```c#
+using NullOpsDevs.LibSsh.Core;
+
+var options = new CommandExecutionOptions
+{
+    RequestPty = true,
+    TerminalType = TerminalType.Xterm256Color  // Enable color support
+};
+
+var result = session.ExecuteCommand("ls --color=always", options);
+Console.WriteLine(result.Stdout);  // Contains ANSI color codes
+```
+
+> **Note**: PTY enables passthrough of ANSI terminal control codes (colors, cursor positioning, etc.). However, truly interactive commands that require user input (like password prompts, `vim`, interactive `sudo`) are not supported as the library cannot handle interactive terminal I/O.
+
+### Common PTY Use Cases
+
+#### Getting Colored Output
+
+```c#
+var options = new CommandExecutionOptions
+{
+    RequestPty = true,
+    TerminalType = TerminalType.Xterm256Color
+};
+
+var result = session.ExecuteCommand("ls --color=always", options);
+// Output contains ANSI color codes that can be displayed in a terminal
+Console.WriteLine(result.Stdout);
+```
+
+#### Running Commands That Check for TTY
+
+```c#
+// Some commands behave differently when they detect a terminal
+var options = new CommandExecutionOptions { RequestPty = true };
+var result = session.ExecuteCommand("./script-that-checks-tty.sh", options);
+
+if (result.ExitCode == 0)
+{
+    Console.WriteLine("Script executed successfully");
+}
+```
+
+## Customizing Terminal Settings
+
+When requesting a PTY, you can customize the terminal:
+
+```c#
+using NullOpsDevs.LibSsh.Core;
+using NullOpsDevs.LibSsh.Terminal;
+
+var options = new CommandExecutionOptions
+{
+    RequestPty = true,
+    TerminalType = TerminalType.Xterm256Color,  // Terminal emulation type
+    TerminalWidth = 120,                         // Width in characters
+    TerminalHeight = 40,                         // Height in characters
+};
+
+var result = session.ExecuteCommand("top -b -n 1", options);
+Console.WriteLine(result.Stdout);
+```
+
+### Available Terminal Types
+
+| Terminal Type | Description | Use Case |
+|---------------|-------------|----------|
+| `Xterm` | Standard xterm (default) | General purpose |
+| `XtermColor` | xterm with color support | Basic color output |
+| `Xterm256Color` | xterm with 256 colors | Full color support |
+| `VT100` | DEC VT100 | Legacy compatibility |
+| `VT220` | DEC VT220 | Legacy compatibility |
+| `Linux` | Linux console | Linux-specific features |
+| `Screen` | GNU Screen multiplexer | Screen sessions |
+
+## Running Multiple Commands
+
+### Sequential Commands (with error handling)
+
+```c#
+// Stop on first failure
+var result1 = session.ExecuteCommand("mkdir -p /tmp/myapp");
+if (result1.ExitCode != 0)
+{
+    Console.WriteLine("Failed to create directory");
+    return;
+}
+
+var result2 = session.ExecuteCommand("cd /tmp/myapp && touch file.txt");
+if (result2.ExitCode != 0)
+{
+    Console.WriteLine("Failed to create file");
+    return;
+}
+
+Console.WriteLine("All commands executed successfully");
+```
+
+### Using Shell Operators
+
+```c#
+// Run multiple commands in a single execution (with && for conditional execution)
+var result = session.ExecuteCommand("cd /tmp && mkdir test && cd test && pwd");
+Console.WriteLine(result.Stdout);  // Should print: /tmp/test
+
+// Run commands regardless of success (with ;)
+result = session.ExecuteCommand("command1; command2; command3");
+
+// Run command in background (with &)
+result = session.ExecuteCommand("long-running-task &");
+```
+
+## Long-Running Commands
+
+For commands that take a long time, consider using cancellation tokens:
+
+```c#
+using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+try
+{
+    var result = await session.ExecuteCommandAsync(
+        "./long-script.sh",
+        cancellationToken: cts.Token
+    );
+
+    Console.WriteLine("Script completed!");
+    Console.WriteLine(result.Stdout);
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Command timed out after 5 minutes");
+}
+```
+
+## Advanced: Channel Settings
+
+For fine-tuning performance, adjust channel settings:
+
+```c#
+var options = new CommandExecutionOptions
+{
+    WindowSize = 4 * 1024 * 1024,  // 4MB window (default: 2MB)
+    PacketSize = 64 * 1024,         // 64KB packets (default: 32KB)
+};
+
+var result = session.ExecuteCommand("cat large-file.txt", options);
+```
+
+> **Note:** Only adjust these settings if you experience performance issues with large data transfers. The defaults work well for most use cases.
+
+## Complete Example
+
+Here's a comprehensive example showing various command execution scenarios:
+
+```c#
+using NullOpsDevs.LibSsh;
+using NullOpsDevs.LibSsh.Core;
+using NullOpsDevs.LibSsh.Credentials;
+using NullOpsDevs.LibSsh.Exceptions;
+
+var session = new SshSession();
+
+try
+{
+    // Connect and authenticate
+    session.Connect("example.com", 22);
+    session.Authenticate(SshCredential.FromPublicKeyFile(
+        "username",
+        "~/.ssh/id_ed25519.pub",
+        "~/.ssh/id_ed25519"
+    ));
+
+    // 1. Simple command
+    Console.WriteLine("=== System Information ===");
+    var result = session.ExecuteCommand("uname -a");
+    Console.WriteLine(result.Stdout);
+
+    // 2. Command with error checking
+    Console.WriteLine("\n=== Disk Usage ===");
+    result = session.ExecuteCommand("df -h /");
+    if (result.ExitCode == 0)
+    {
+        Console.WriteLine(result.Stdout);
+    }
+    else
+    {
+        Console.WriteLine($"Error: {result.Stderr}");
+    }
+
+    // 3. Command requiring PTY
+    Console.WriteLine("\n=== Running with sudo ===");
+    var ptyOptions = new CommandExecutionOptions { RequestPty = true };
+    result = session.ExecuteCommand("sudo ls /root", ptyOptions);
+
+    if (result.ExitCode == 0)
+    {
+        Console.WriteLine(result.Stdout);
+    }
+
+    // 4. Multiple commands
+    Console.WriteLine("\n=== Creating test directory ===");
+    result = session.ExecuteCommand("mkdir -p /tmp/test && cd /tmp/test && pwd");
+    Console.WriteLine($"Created: {result.Stdout.Trim()}");
+
+    // 5. Async command
+    Console.WriteLine("\n=== Async operation ===");
+    result = await session.ExecuteCommandAsync("ps aux | head -n 5");
+    Console.WriteLine(result.Stdout);
+}
+catch (SshException ex)
+{
+    Console.WriteLine($"SSH error: {ex.Message}");
+}
+finally
+{
+    session.Dispose();
+}
+```
+
+## Best Practices
+
+1. **Always check exit codes**:
+   - Don't rely solely on `Successful` - check `ExitCode`
+   - Zero typically means success, non-zero means failure
+
+2. **Use PTY when needed**:
+   - Enable for `sudo`, interactive commands, or color output
+   - Disable for scripting and automation (default)
+
+3. **Handle both stdout and stderr**:
+   - Some programs write to stderr even on success
+   - Check both streams for complete information
+
+4. **Quote arguments properly**:
+   - Use shell quoting for arguments with spaces
+   - Example: `"ls '/path with spaces/'"`
+
+5. **Avoid command injection**:
+   - Don't concatenate user input directly into commands
+   - Validate and sanitize all user-provided data
+
+6. **Set appropriate timeouts**:
+   - Use cancellation tokens for long-running commands
+   - Consider session timeouts with `SetSessionTimeout()`
+
+## Common Issues
+
+### Issue: Command works locally but not via SSH
+**Solution**: The command might require PTY. Enable `RequestPty = true`.
+
+### Issue: Interactive commands hang or fail
+**Solution**: Interactive commands (password prompts, `vim`, interactive `sudo`) are not supported. The library cannot handle interactive terminal I/O. Use non-interactive alternatives:
+- For sudo: Configure passwordless sudo
+- For passwords: Pass via command arguments or environment variables
+- For interactive tools: Use non-interactive flags (e.g., `vim -e` for ex mode)
+
+### Issue: Color codes appear as garbage
+**Solution**: Either enable PTY with appropriate terminal type, or disable colors in the command (e.g., `ls --color=never`).
+
+### Issue: Working directory not persisted
+**Solution**: Each `ExecuteCommand()` starts in the user's home directory. Use `cd /path && command` or absolute paths.
+
+## See Also
+
+- `SshSession.ExecuteCommand()` (SshSession.cs:401) - Execute commands synchronously
+- `SshSession.ExecuteCommandAsync()` (SshSession.cs:536) - Execute commands asynchronously
+- `CommandExecutionOptions` (CommandExecutionOptions.cs:11) - Configure command execution
+- `SshCommandResult` (SshCommandResult.cs:6) - Command execution results
+- [Authentication](authentication.md) - Authenticate before executing commands
+- [Advanced Terminal Control](advanced-terminal-control.md) - Configure terminal modes for PTY
+- [Session Timeouts](session-timeouts.md) - Set timeouts for long-running commands
+- [Session Lifecycle](session-lifecycle.md) - Understanding session states
+- [Error Handling](error-handling.md) - Handle command execution errors

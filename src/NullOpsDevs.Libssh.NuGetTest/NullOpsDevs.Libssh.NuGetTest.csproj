@@ -8,7 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="NullOpsDevs.LibSsh" Version="1.0.0-deploy-test" />
+      <PackageReference Include="NullOpsDevs.LibSsh" Version="1.1.1" />
     </ItemGroup>
 
 </Project>

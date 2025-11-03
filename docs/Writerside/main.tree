@@ -7,6 +7,20 @@
                   start-page="quickstart.md">
 
     <toc-element topic="quickstart.md"/>
-    <toc-element toc-title="Digging deeper"/>
-    <toc-element topic="authentication.md"/>
+    <toc-element toc-title="Core Concepts">
+        <toc-element topic="session-lifecycle.md"/>
+        <toc-element topic="authentication.md"/>
+        <toc-element topic="host-key-retrieval-and-verification.md"/>
+        <toc-element topic="error-handling.md"/>
+    </toc-element>
+    <toc-element toc-title="Operations">
+        <toc-element topic="command-execution.md"/>
+        <toc-element topic="scp.md"/>
+    </toc-element>
+    <toc-element toc-title="Configuration">
+        <toc-element topic="session-timeouts.md"/>
+        <toc-element topic="keeping-connection-alive.md"/>
+        <toc-element topic="algorithm-preferences.md"/>
+        <toc-element topic="advanced-terminal-control.md"/>
+    </toc-element>
 </instance-profile>

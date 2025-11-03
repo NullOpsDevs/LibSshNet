@@ -3,11 +3,25 @@
 <buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
                xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-    <variables></variables>
     <build-profile instance="main">
         <variables>
+            <primary-color>iris</primary-color>
             <noindex-content>false</noindex-content>
+            
+            <custom-favicons>logo.png</custom-favicons>
+            <header-logo>logo.png</header-logo>
+            
+            <download-title>Library on NuGet</download-title>
+            <download-page>https://www.nuget.org/packages/NullOpsDevs.LibSsh/</download-page>
+            <showDownloadButton>true</showDownloadButton>
+            
+            <content-max-width>1400</content-max-width>
         </variables>
+        
+        <footer>
+            <social type="github" href="https://github.com/NullOpsDevs/LibSshNet" />
+            <copyright>NullOpsDevs, 0x25CBFC4F</copyright>
+        </footer>
     </build-profile>
 
 </buildprofiles>

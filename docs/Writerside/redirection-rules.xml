@@ -6,8 +6,4 @@
         <accepts>page.html</accepts>
     </rule>
     -->
-    <rule id="6ddf104">
-        <description>Created after removal of "About main" from LibSshNet</description>
-        <accepts>starter-topic.html</accepts>
-    </rule>
 </rules>

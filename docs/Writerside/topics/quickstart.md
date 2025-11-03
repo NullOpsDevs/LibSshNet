@@ -20,7 +20,7 @@
 ### 2. Connect to the server and execute some commands!
 
 ```c#
-using NullOpsDevs.LibSsh.Core;
+using NullOpsDevs.LibSsh;
 using NullOpsDevs.LibSsh.Credentials;
 
 var ssh = new SshSession();
@@ -29,3 +29,12 @@ ssh.Authenticate(SshCredential.FromPassword("user", "12345"));
 
 Console.WriteLine(ssh.ExecuteCommand("ls").Stdout);
 ```
+
+## Next Steps
+
+- [Session Lifecycle](session-lifecycle.md) - Understand how sessions progress through states
+- [Authentication](authentication.md) - Learn about all authentication methods
+- [Command Execution](command-execution.md) - Execute commands with PTY support
+- [File Transfer with SCP](scp.md) - Upload and download files
+- [Error Handling](error-handling.md) - Handle SSH errors properly
+- [Algorithm and Method Preferences](algorithm-preferences.md) - Configure security settings

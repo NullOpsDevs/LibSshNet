@@ -1,4 +1,4 @@
-﻿using NullOpsDevs.LibSsh.Core;
+﻿using NullOpsDevs.LibSsh;
 using NullOpsDevs.LibSsh.Credentials;
 
 var ssh = new SshSession();
