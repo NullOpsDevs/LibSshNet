@@ -14,6 +14,8 @@ public static class Program
     private static int passedTests;
     private static int failedTests;
     private static int skippedTests;
+    private static readonly List<(string Category, string Name, bool Passed, string? Error)> testResults = new();
+    private static string currentCategory = "";
 
     public static async Task<int> Main()
     {
@@ -58,11 +60,15 @@ public static class Program
         AnsiConsole.WriteLine();
         DisplaySummary();
 
+        // Generate GitHub summary if running in CI
+        GenerateGitHubSummary();
+
         return failedTests > 0 ? 1 : 0;
     }
 
     private static async Task RunTestCategory(string categoryName, Func<Task> testFunc)
     {
+        currentCategory = categoryName;
         AnsiConsole.Write(new Rule($"[bold blue]{categoryName}[/]").RuleStyle("blue dim"));
         AnsiConsole.WriteLine();
 
@@ -686,11 +692,13 @@ public static class Program
             {
                 AnsiConsole.MarkupLine($"[green]  ✓[/] {testName}");
                 passedTests++;
+                testResults.Add((currentCategory, testName, true, null));
             }
             else
             {
                 AnsiConsole.MarkupLine($"[red]  ✗[/] {testName}");
                 failedTests++;
+                testResults.Add((currentCategory, testName, false, "Test returned false"));
             }
         }
         catch (Exception ex)
@@ -698,6 +706,7 @@ public static class Program
             AnsiConsole.MarkupLine($"[red]  ✗[/] {testName}: {Markup.Escape(ex.Message)}");
             AnsiConsole.WriteException(ex, ExceptionFormats.ShortenPaths | ExceptionFormats.ShortenTypes);
             failedTests++;
+            testResults.Add((currentCategory, testName, false, ex.Message));
         }
     }
 
@@ -726,6 +735,76 @@ public static class Program
         else if (failedTests > 0)
         {
             AnsiConsole.MarkupLine($"\n[bold red]{failedTests} test(s) failed.[/]");
+        }
+    }
+
+    private static void GenerateGitHubSummary()
+    {
+        var summaryFile = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+        
+        if (string.IsNullOrEmpty(summaryFile))
+            return;
+
+        try
+        {
+            var markdown = new StringBuilder();
+
+            // Title
+            markdown.AppendLine("# LibSSH2 Test Results");
+            markdown.AppendLine();
+
+            // Summary table
+            markdown.AppendLine("## Summary");
+            markdown.AppendLine();
+            markdown.AppendLine("| Result | Count |");
+            markdown.AppendLine("|--------|-------|");
+            markdown.AppendLine($"| ✅ Passed | {passedTests} |");
+            if (failedTests > 0)
+                markdown.AppendLine($"| ❌ Failed | {failedTests} |");
+            if (skippedTests > 0)
+                markdown.AppendLine($"| ⏭️ Skipped | {skippedTests} |");
+            markdown.AppendLine($"| **Total** | **{passedTests + failedTests + skippedTests}** |");
+            markdown.AppendLine();
+
+            // Overall status
+            if (failedTests == 0 && passedTests > 0)
+            {
+                markdown.AppendLine("> ✅ **All tests passed!** 🎉");
+            }
+            else if (failedTests > 0)
+            {
+                markdown.AppendLine($"> ❌ **{failedTests} test(s) failed.**");
+            }
+            markdown.AppendLine();
+
+            // Detailed results by category
+            markdown.AppendLine("## Detailed Results");
+            markdown.AppendLine();
+
+            var groupedResults = testResults.GroupBy(t => t.Category);
+            foreach (var group in groupedResults)
+            {
+                markdown.AppendLine($"### {group.Key}");
+                markdown.AppendLine();
+
+                foreach (var test in group)
+                {
+                    var icon = test.Passed ? "✅" : "❌";
+                    markdown.AppendLine($"- {icon} {test.Name}");
+                    if (!test.Passed && !string.IsNullOrEmpty(test.Error))
+                    {
+                        markdown.AppendLine($"  - Error: `{test.Error}`");
+                    }
+                }
+                markdown.AppendLine();
+            }
+
+            File.WriteAllText(summaryFile, markdown.ToString());
+            AnsiConsole.MarkupLine($"[dim]GitHub summary written to {summaryFile}[/]");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Failed to write GitHub summary: {Markup.Escape(ex.Message)}[/]");
         }
     }
 
