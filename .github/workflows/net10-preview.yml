@@ -1,0 +1,31 @@
+name: .NET 10 Preview Test
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  net10-preview:
+    name: .NET 10 Preview Hello World
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 10 Preview
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+        dotnet-quality: 'preview'
+
+    - name: Display .NET version
+      run: dotnet --version
+
+    - name: List installed SDKs
+      run: dotnet --list-sdks
+
+    - name: Display .NET info
+      run: dotnet --info

@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - matrix-test
+    paths:
+      - 'src/**'
+      - '**.csproj'
+      - '**.sln'
+      - '.github/workflows/test-dotnet-versions.yml'
   workflow_dispatch:
 
 jobs:

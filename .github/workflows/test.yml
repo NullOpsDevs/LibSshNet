@@ -2,8 +2,13 @@ name: Test
 
 on:
   push:
-    branches: 
+    branches:
       - main
+    paths:
+      - 'src/**'
+      - '**.csproj'
+      - '**.sln'
+      - '.github/workflows/test.yml'
   workflow_dispatch:
 
 jobs:
