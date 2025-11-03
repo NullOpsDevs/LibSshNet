@@ -172,15 +172,15 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         EnsureInitialized();
         EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
 
-        UIntPtr length = 0;
+        var length = UIntPtr.Zero;
         var type = 0;
         
         var ptr = libssh2_session_hostkey(SessionPtr, &length, &type);
         
-        if (ptr == null || length == 0)
+        if (ptr == null || length == UIntPtr.Zero)
             throw SshException.FromLastSessionError(SessionPtr);
         
-        var buffer = new byte[length];
+        var buffer = new byte[length.ToUInt64()];
         Marshal.Copy(new IntPtr(ptr), buffer, 0, (int) length);
 
         return new SshHostKey
@@ -205,7 +205,7 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         EnsureInitialized();
         EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
         
-        if(!Enum.IsDefined(method))
+        if(!Enum.IsDefined(typeof(SshMethod), method))
             throw new ArgumentOutOfRangeException(nameof(method), method, null);
         
         var result = libssh2_session_methods(SessionPtr, (int) method);

@@ -1,0 +1,140 @@
+name: Multi-Platform Test Matrix
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      dotnet_version:
+        description: '.NET SDK version to use'
+        required: false
+        default: '9.0.x'
+        type: string
+
+jobs:
+  test-matrix:
+    name: Test on ${{ matrix.os }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows
+            arch: x64
+            runner: windows-latest
+            rid: win-x64
+
+          # Linux x64
+          - os: linux
+            arch: x64
+            runner: ubuntu-latest
+            rid: linux-x64
+
+          # Linux ARM64
+          - os: linux
+            arch: arm64
+            runner: ubuntu-latest-arm64
+            rid: linux-arm64
+
+          # macOS x64 (Intel)
+          - os: macos
+            arch: x64
+            runner: macos-13
+            rid: osx-x64
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos
+            arch: arm64
+            runner: macos-latest
+            rid: osx-arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet_version || '9.0.x' }}
+
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
+
+    - name: Start SSH test server (Docker)
+      working-directory: ./src/NullOpsDevs.LibSsh.Test
+      run: docker compose up --build -d
+
+    - name: Wait for SSH server to be ready
+      run: |
+        echo "Waiting for SSH server to start..."
+        sleep 5
+
+    - name: Setup SSH Agent (Linux/macOS)
+      if: matrix.os != 'windows'
+      run: |
+        eval $(ssh-agent -s)
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+        echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+        cp src/NullOpsDevs.LibSsh.Test/docker/test-keys/id_rsa /tmp/id_rsa
+        chmod 600 /tmp/id_rsa
+        ssh-add /tmp/id_rsa
+
+    - name: Setup SSH Agent (Windows)
+      if: matrix.os == 'windows'
+      shell: powershell
+      run: |
+        Start-Service ssh-agent
+        Set-Service -Name ssh-agent -StartupType 'Automatic'
+        Copy-Item "src\NullOpsDevs.LibSsh.Test\docker\test-keys\id_rsa" "$env:TEMP\id_rsa"
+        ssh-add "$env:TEMP\id_rsa"
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build library (Release)
+      run: dotnet build -c Release --no-restore
+
+    - name: Build test project (Release)
+      run: dotnet build -c Release --self-contained -r ${{ matrix.rid }} ./src/NullOpsDevs.LibSsh.Test/NullOpsDevs.LibSsh.Test.csproj
+
+    - name: Run tests (Linux/macOS)
+      if: matrix.os != 'windows'
+      working-directory: ./src/NullOpsDevs.LibSsh.Test/bin/Release/net9.0/${{ matrix.rid }}/
+      run: ./NullOpsDevs.LibSsh.Test
+
+    - name: Run tests (Windows)
+      if: matrix.os == 'windows'
+      working-directory: ./src/NullOpsDevs.LibSsh.Test/bin/Release/net9.0/${{ matrix.rid }}/
+      shell: powershell
+      run: .\NullOpsDevs.LibSsh.Test.exe
+
+    - name: Cleanup Docker
+      if: always()
+      working-directory: ./src/NullOpsDevs.LibSsh.Test
+      run: docker compose down -v
+
+  # Summary job that depends on all matrix jobs
+  test-summary:
+    name: Test Summary
+    needs: test-matrix
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Check test results
+      run: |
+        if [ "${{ needs.test-matrix.result }}" == "success" ]; then
+          echo "✅ All platform tests passed!"
+          exit 0
+        else
+          echo "❌ Some platform tests failed"
+          exit 1
+        fi

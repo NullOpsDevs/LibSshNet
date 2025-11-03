@@ -33,9 +33,15 @@ public readonly struct PlatformInDependentStat
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 return CreateFromMacOsStruct(structure);
-
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD))
+            
+#if NETSTANDARD2_1
+            // Behavior verified on FreeBSD 14.3-RELEASE
+            if (RuntimeInformation.OSDescription.Contains("freebsd", StringComparison.OrdinalIgnoreCase)) {
+#else
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD)) {
+#endif
                 return CreateFromFreeBsdStruct(structure);
+            }
         }
         catch (Exception ex)
         {
