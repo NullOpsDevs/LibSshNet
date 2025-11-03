@@ -266,7 +266,7 @@ catch (SshException ex) when (ex.Error == SshError.ChannelRequestDenied)
 }
 ```
 
-### File Transfer Errors
+### File Transfer Errors {id="handling-file-transfer-errors"}
 
 ```c#
 try
