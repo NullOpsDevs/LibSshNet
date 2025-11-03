@@ -3,13 +3,13 @@
 A modern, cross-platform .NET library providing managed bindings for libssh2, enabling SSH operations including remote command execution, SCP file transfers, and advanced terminal (PTY) features.
 
 [![NuGet](https://img.shields.io/nuget/v/NullOpsDevs.LibSsh)](https://www.nuget.org/packages/NullOpsDevs.LibSsh/)
-[![NuGet](https://img.shields.io/nuget/vpre/NullOpsDevs.LibSsh)](https://www.nuget.org/packages/NullOpsDevs.LibSsh/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-Standard_2.1-purple.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-6.0-purple.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-7.0-purple.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
 [![.NET](https://img.shields.io/badge/.NET-9.0-purple.svg)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![Documentation](https://img.shields.io/badge/Documentation-blue)](https://libsshnet.nullops.systems/quickstart)
 
 ## Features

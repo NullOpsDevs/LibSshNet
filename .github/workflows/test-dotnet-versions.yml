@@ -22,12 +22,19 @@ jobs:
         include:
           - target-framework: net6.0
             dotnet-version: '6.0.x'
+            quality: 'ga'
           - target-framework: net7.0
             dotnet-version: '7.0.x'
+            quality: 'ga'
           - target-framework: net8.0
             dotnet-version: '8.0.x'
+            quality: 'ga'
           - target-framework: net9.0
             dotnet-version: '9.0.x'
+            quality: 'ga'
+          - target-framework: net10.0
+            dotnet-version: '10.0.x'
+            quality: 'preview'
 
     steps:
     - name: Checkout code
@@ -37,6 +44,7 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet-version }}
+        dotnet-quality: ${{ matrix.quality }}
 
     - name: Set up Docker Compose
       uses: docker/setup-compose-action@v1
