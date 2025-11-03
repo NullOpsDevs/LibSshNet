@@ -1,6 +1,9 @@
 name: Test .NET Versions
 
 on:
+  push:
+    branches:
+      - matrix-test
   workflow_dispatch:
 
 jobs:
