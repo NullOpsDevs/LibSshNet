@@ -72,21 +72,27 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         
         throw new SshException($"SshConnection must be in one of the statuses '{string.Join(", ", statuses.Select(s => $"{s:G}"))}' to perform that operation.", SshError.DevWrongUse);
     }
-    
+
     /// <summary>
     /// Connects to an SSH server at the specified host and port.
     /// </summary>
     /// <param name="host">The hostname or IP address of the SSH server.</param>
     /// <param name="port">The port number of the SSH server (typically 22).</param>
+    /// <param name="socketTimeout">Optional timeout for socket send and receive operations. If not specified, the socket will have no timeout (infinite). Must be greater than zero and less than <see cref="int.MaxValue"/> milliseconds.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when socketTimeout is negative or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
     /// <exception cref="SshException">Thrown when connection or SSH handshake fails.</exception>
     /// <remarks>
     /// <para>This method establishes a TCP connection and performs the SSH protocol handshake.</para>
     /// <para>The session must be in <see cref="SshConnectionStatus.Disconnected"/> status before calling this method.</para>
     /// <para>After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.</para>
     /// <para>You must call <see cref="Authenticate"/> before executing commands.</para>
+    /// <para>The <paramref name="socketTimeout"/> parameter controls the underlying TCP socket's send and receive timeout values. This is separate from the SSH session timeout configured via <see cref="SetSessionTimeout"/>. Socket timeouts affect low-level network operations, while session timeouts affect SSH protocol operations.</para>
     /// </remarks>
-    public unsafe void Connect(string host, int port)
+    public unsafe void Connect(string host, int port, TimeSpan? socketTimeout = null)
     {
+        if(socketTimeout.HasValue && (socketTimeout.Value < TimeSpan.Zero || socketTimeout.Value.TotalMilliseconds > int.MaxValue))
+            throw new ArgumentOutOfRangeException(nameof(socketTimeout), socketTimeout, "Socket timeout must be greater than zero and less than int.MaxValue milliseconds");
+            
         EnsureInitialized();
         EnsureInStatus(SshConnectionStatus.Disconnected);
 
@@ -100,7 +106,15 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
             try
             {
                 logger?.LogDebug("Connecting to server: '{Host}:{Port}'...", host, port);
+                socket?.Dispose();
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                
+                if (socketTimeout.HasValue)
+                {
+                    socket.ReceiveTimeout = (int)socketTimeout.Value.TotalMilliseconds;
+                    socket.SendTimeout = (int)socketTimeout.Value.TotalMilliseconds;
+                }
+                
                 socket.Connect(host, port);
             }
             catch (Exception ex)
@@ -373,17 +387,20 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     /// </summary>
     /// <param name="host">The hostname or IP address of the SSH server.</param>
     /// <param name="port">The port number of the SSH server (typically 22).</param>
+    /// <param name="socketTimeout">Optional timeout for socket send and receive operations. If not specified, the socket will have no timeout (infinite). Must be greater than zero and less than <see cref="int.MaxValue"/> milliseconds.</param>
     /// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when socketTimeout is negative or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
     /// <exception cref="SshException">Thrown when connection or SSH handshake fails.</exception>
     /// <remarks>
     /// <para>This method offloads the blocking connection and handshake operations to a thread pool thread.</para>
     /// <para>The session must be in <see cref="SshConnectionStatus.Disconnected"/> status before calling this method.</para>
     /// <para>After successful connection, the session will be in <see cref="SshConnectionStatus.Connected"/> status.</para>
     /// <para>You must call <see cref="AuthenticateAsync"/> or <see cref="Authenticate"/> before executing commands.</para>
+    /// <para>The <paramref name="socketTimeout"/> parameter controls the underlying TCP socket's send and receive timeout values. This is separate from the SSH session timeout configured via <see cref="SetSessionTimeout"/>. Socket timeouts affect low-level network operations, while session timeouts affect SSH protocol operations.</para>
     /// </remarks>
-    public Task ConnectAsync(string host, int port, CancellationToken cancellationToken = default)
+    public Task ConnectAsync(string host, int port, TimeSpan? socketTimeout = null, CancellationToken cancellationToken = default)
     {
-        return Task.Run(() => Connect(host, port), cancellationToken);
+        return Task.Run(() => Connect(host, port, socketTimeout), cancellationToken);
     }
 
     /// <summary>
@@ -425,99 +442,94 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 
         logger?.LogDebug("Channel opened successfully");
 
-        // Request PTY if specified
-        if (options.RequestPty)
+        try
         {
-            logger?.LogDebug("Requesting PTY (type: {OptionsTerminalType}, size: {OptionsTerminalWidth}x{OptionsTerminalHeight})", options.TerminalType, options.TerminalWidth, options.TerminalHeight);
-            
-            var terminalType = options.TerminalType.ToLibSsh2String();
-            var terminalModes = options.TerminalModes ?? TerminalModesBuilder.Empty;
+            // Request PTY if specified
+            if (options.RequestPty)
+            {
+                logger?.LogDebug("Requesting PTY (type: {OptionsTerminalType}, size: {OptionsTerminalWidth}x{OptionsTerminalHeight})", options.TerminalType, options.TerminalWidth, options.TerminalHeight);
 
-            using var terminalTypeBuffer = NativeBuffer.Allocate(terminalType);
-            using var terminalModesBuffer = NativeBuffer.Allocate(terminalModes);
+                var terminalType = options.TerminalType.ToLibSsh2String();
+                var terminalModes = options.TerminalModes ?? TerminalModesBuilder.Empty;
 
-            var ptyResult = libssh2_channel_request_pty_ex(
+                using var terminalTypeBuffer = NativeBuffer.Allocate(terminalType);
+                using var terminalModesBuffer = NativeBuffer.Allocate(terminalModes);
+
+                var ptyResult = libssh2_channel_request_pty_ex(
+                    channel,
+                    (sbyte*)terminalTypeBuffer.Pointer,
+                    (uint)terminalTypeBuffer.Length,
+                    (sbyte*)terminalModesBuffer.Pointer,
+                    (uint)terminalModesBuffer.Length,
+                    options.TerminalWidth,
+                    options.TerminalHeight,
+                    options.TerminalWidthPixels,
+                    options.TerminalHeightPixels
+                );
+
+                ptyResult.ThrowIfNotSuccessful(this, "Failed to request PTY");
+
+                logger?.LogDebug("PTY requested successfully");
+            }
+
+            logger?.LogDebug("Starting command process execution");
+            using var commandBytes = NativeBuffer.Allocate(command);
+
+            var processStartupResult = libssh2_channel_process_startup(
                 channel,
-                (sbyte*)terminalTypeBuffer.Pointer,
-                (uint)terminalTypeBuffer.Length,
-                (sbyte*)terminalModesBuffer.Pointer,
-                (uint)terminalModesBuffer.Length,
-                options.TerminalWidth,
-                options.TerminalHeight,
-                options.TerminalWidthPixels,
-                options.TerminalHeightPixels
+                StringPointers.Exec,
+                4,
+                (sbyte*)commandBytes.Pointer,
+                (uint)commandBytes.Length
             );
 
-            ptyResult.ThrowIfNotSuccessful(this, "Failed to request PTY", also: () =>
-            {
-                libssh2_channel_close(channel);
-                libssh2_channel_wait_closed(channel);
-                libssh2_channel_free(channel);
-            });
+            processStartupResult.ThrowIfNotSuccessful(this, "Unable to execute command");
 
-            logger?.LogDebug("PTY requested successfully");
-        }
+            logger?.LogDebug("Command process started, reading output");
+            var stdout = ChannelReader.ReadUtf8String(channel, ChannelReader.StdoutStreamId, cancellationToken);
+            logger?.LogDebug("Read {StdoutLength} bytes from stdout", stdout.Length);
 
-        logger?.LogDebug("Starting command process execution");
-        using var commandBytes = NativeBuffer.Allocate(command);
+            var stderr = ChannelReader.ReadUtf8String(channel, ChannelReader.StderrStreamId, cancellationToken);
+            logger?.LogDebug("Read {StderrLength} bytes from stderr", stderr.Length);
 
-        var processStartupResult = libssh2_channel_process_startup(
-            channel,
-            StringPointers.Exec,
-            4,
-            (sbyte*)commandBytes.Pointer,
-            (uint)commandBytes.Length
-        );
-
-        processStartupResult.ThrowIfNotSuccessful(this, "Unable to execute command", also: () =>
-        {
+            logger?.LogDebug("Closing channel");
             libssh2_channel_close(channel);
             libssh2_channel_wait_closed(channel);
+
+            logger?.LogDebug("Retrieving exit status");
+            var exitStatus = libssh2_channel_get_exit_status(channel);
+            logger?.LogDebug("Command exit status: {ExitStatus}", exitStatus);
+
+            logger?.LogDebug("Retrieving exit signal");
+            sbyte* exitSignalPtr = null;
+            nuint exitSignalLen = 0;
+            var exitSignalResult = libssh2_channel_get_exit_signal(channel, &exitSignalPtr, &exitSignalLen, null, null, null, null);
+
+            string? exitSignal = null;
+            if (exitSignalResult == 0 && exitSignalPtr != null && exitSignalLen > 0)
+            {
+                exitSignal = Marshal.PtrToStringUTF8((IntPtr)exitSignalPtr, (int)exitSignalLen);
+                logger?.LogDebug("Command exit signal: {ExitSignal}", exitSignal);
+            }
+            else
+            {
+                logger?.LogDebug("No exit signal");
+            }
+
+            return new SshCommandResult
+            {
+                Successful = true,
+                Stdout = stdout,
+                Stderr = stderr,
+                ExitCode = exitStatus,
+                ExitSignal = exitSignal
+            };
+        }
+        finally
+        {
             libssh2_channel_free(channel);
-        });
-
-        logger?.LogDebug("Command process started, reading output");
-        var stdout = ChannelReader.ReadUtf8String(channel, ChannelReader.StdoutStreamId, cancellationToken);
-        logger?.LogDebug("Read {StdoutLength} bytes from stdout", stdout.Length);
-
-        var stderr = ChannelReader.ReadUtf8String(channel, ChannelReader.StderrStreamId, cancellationToken);
-        logger?.LogDebug("Read {StderrLength} bytes from stderr", stderr.Length);
-
-        logger?.LogDebug("Closing channel");
-        libssh2_channel_close(channel);
-        libssh2_channel_wait_closed(channel);
-
-        logger?.LogDebug("Retrieving exit status");
-        var exitStatus = libssh2_channel_get_exit_status(channel);
-        logger?.LogDebug("Command exit status: {ExitStatus}", exitStatus);
-
-        logger?.LogDebug("Retrieving exit signal");
-        sbyte* exitSignalPtr = null;
-        nuint exitSignalLen = 0;
-        var exitSignalResult = libssh2_channel_get_exit_signal(channel, &exitSignalPtr, &exitSignalLen, null, null, null, null);
-
-        string? exitSignal = null;
-        if (exitSignalResult == 0 && exitSignalPtr != null && exitSignalLen > 0)
-        {
-            exitSignal = Marshal.PtrToStringUTF8((IntPtr)exitSignalPtr, (int)exitSignalLen);
-            logger?.LogDebug("Command exit signal: {ExitSignal}", exitSignal);
+            logger?.LogDebug("Channel freed");
         }
-        else
-        {
-            logger?.LogDebug("No exit signal");
-        }
-
-        libssh2_channel_free(channel);
-        logger?.LogDebug("Channel closed");
-
-        return new SshCommandResult
-        {
-            Successful = true,
-            Stdout = stdout,
-            Stderr = stderr,
-            ExitCode = exitStatus,
-            ExitSignal = exitSignal
-        };
     }
 
     /// <summary>
@@ -783,11 +795,24 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 
         if (SessionPtr != null)
         {
+            _ = libssh2_session_disconnect_ex(SessionPtr, SSH_DISCONNECT_BY_APPLICATION, StringPointers.SessionDisposed, null);
             _ = libssh2_session_free(SessionPtr);
             SessionPtr = null;
         }
 
-        socket?.Dispose();
+        if (socket != null)
+        {
+            try
+            {
+                socket.Shutdown(SocketShutdown.Both);
+            }
+            catch
+            {
+                // Socket may already be closed, ignore errors
+            }
+            socket.Dispose();
+        }
+
         ConnectionStatus = SshConnectionStatus.Disposed;
     }
 }

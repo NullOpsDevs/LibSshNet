@@ -12,9 +12,13 @@ public static class NativePreloader
 
     public static bool Preload()
     {
-        if (!Directory.Exists("native"))
+        // Get the directory where the test executable is located
+        var executableDir = AppContext.BaseDirectory;
+        var nativeDir = Path.Combine(executableDir, "native");
+
+        if (!Directory.Exists(nativeDir))
         {
-            AnsiConsole.MarkupLine("[red]Folder 'native' was not found.[/]");
+            AnsiConsole.MarkupLine($"[red]Folder 'native' was not found at: {nativeDir}[/]");
             return false;
         }
 
@@ -27,15 +31,15 @@ public static class NativePreloader
         var isArm64 = processArchitecture == Architecture.Arm64;
 
         if (isWindows && isx64)
-            _libraryPath = Path.GetFullPath("native/libssh2-win-x64/libssh2.dll");
+            _libraryPath = Path.Combine(nativeDir, "libssh2-win-x64", "libssh2.dll");
         else if (isLinux && isx64)
-            _libraryPath = Path.GetFullPath("native/libssh2-linux-x64/libssh2.so");
+            _libraryPath = Path.Combine(nativeDir, "libssh2-linux-x64", "libssh2.so");
         else if (isLinux && isArm64)
-            _libraryPath = Path.GetFullPath("native/libssh2-linux-arm64/libssh2.so");
+            _libraryPath = Path.Combine(nativeDir, "libssh2-linux-arm64", "libssh2.so");
         else if (isMac && isx64)
-            _libraryPath = Path.GetFullPath("native/libssh2-osx-x64/libssh2.dylib");
+            _libraryPath = Path.Combine(nativeDir, "libssh2-osx-x64", "libssh2.dylib");
         else if (isMac && isArm64)
-            _libraryPath = Path.GetFullPath("native/libssh2-osx-arm64/libssh2.dylib");
+            _libraryPath = Path.Combine(nativeDir, "libssh2-osx-arm64", "libssh2.dylib");
 
         if (_libraryPath == null)
         {

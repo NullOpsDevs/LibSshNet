@@ -23,4 +23,10 @@
         <toc-element topic="algorithm-preferences.md"/>
         <toc-element topic="advanced-terminal-control.md"/>
     </toc-element>
+    <toc-element toc-title="Advanced">
+        <toc-element topic="performance-and-reliability.md"/>
+    </toc-element>
+    <toc-element toc-title="Development">
+        <toc-element topic="running-tests-locally.md"/>
+    </toc-element>
 </instance-profile>

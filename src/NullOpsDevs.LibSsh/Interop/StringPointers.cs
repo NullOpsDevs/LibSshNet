@@ -8,12 +8,17 @@ namespace NullOpsDevs.LibSsh.Interop;
 internal static class StringPointers
 {
     /// <summary>
-    /// Pointer to the "session" string used for SSH channel types.
+    /// Pointer to the "session" string.
     /// </summary>
     public static readonly unsafe sbyte* Session = (sbyte*)Marshal.StringToHGlobalAnsi("session");
 
     /// <summary>
-    /// Pointer to the "exec" string used for command execution channel requests.
+    /// Pointer to the "exec" string.
     /// </summary>
     public static readonly unsafe sbyte* Exec = (sbyte*)Marshal.StringToHGlobalAnsi("exec");
+    
+    /// <summary>
+    /// Pointer to the "Session disposed" string.
+    /// </summary>
+    public static readonly unsafe sbyte* SessionDisposed = (sbyte*)Marshal.StringToHGlobalAnsi("Session disposed");
 }

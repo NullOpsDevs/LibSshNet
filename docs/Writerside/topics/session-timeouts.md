@@ -22,6 +22,94 @@ session.Authenticate(SshCredential.FromPassword("user", "password"));
 var result = session.ExecuteCommand("some-command");
 ```
 
+## Socket Timeout vs Session Timeout
+
+NullOpsDevs.LibSsh provides **two types of timeouts** that serve different purposes:
+
+### Socket Timeout
+
+Socket timeout controls the **low-level TCP network operations** (send and receive). This is configured during connection:
+
+```c#
+var session = new SshSession();
+
+// Set socket timeout to 10 seconds - affects TCP send/receive operations
+session.Connect("example.com", 22, socketTimeout: TimeSpan.FromSeconds(10));
+
+// Socket timeout is now active for all network I/O
+session.Authenticate(credential);
+```
+
+**Key characteristics:**
+- Set during `Connect()` or `ConnectAsync()`
+- Affects **underlying TCP socket** send and receive operations
+- Default: **No timeout** (infinite) if not specified
+- Cannot be changed after connection is established
+- Controls how long the socket waits for network data
+
+> **Important:** Only set the socket timeout if you are experiencing network-level timeout issues. In most cases, the default (no timeout) is appropriate, and you should use session timeouts instead to control SSH operation duration.
+
+### Session Timeout
+
+Session timeout controls **SSH protocol operations** (commands, file transfers, authentication). This is configured after connection:
+
+```c#
+var session = new SshSession();
+session.Connect("example.com", 22);
+
+// Set session timeout to 5 minutes - affects SSH operations
+session.SetSessionTimeout(TimeSpan.FromMinutes(5));
+
+session.Authenticate(credential);
+
+// This command will timeout if SSH operation takes longer than 5 minutes
+var result = session.ExecuteCommand("long-running-command");
+```
+
+**Key characteristics:**
+- Set after `Connect()` using `SetSessionTimeout()`
+- Affects **SSH protocol operations** (commands, authentication, file transfers)
+- Default: **No timeout** (infinite)
+- Can be changed at any time after connection
+- Controls how long SSH operations wait before giving up
+
+### Comparison Table
+
+| Feature | Socket Timeout | Session Timeout |
+|---------|----------------|-----------------|
+| **Layer** | TCP/Network | SSH Protocol |
+| **When set** | During `Connect()` | After `Connect()` |
+| **Controls** | TCP send/receive operations | SSH operations (commands, transfers) |
+| **Default** | No timeout (infinite) | No timeout (infinite) |
+| **Can change** | No (fixed at connection) | Yes (anytime) |
+| **Configuration** | `Connect(host, port, socketTimeout)` | `SetSessionTimeout()` / `DisableSessionTimeout()` |
+| **Use case** | Prevent network I/O hangs | Prevent SSH operation hangs |
+| **When to use** | Only when facing network timeout issues | For general operation timeout control |
+
+### Using Both Together
+
+For comprehensive timeout protection in problematic network environments, use both:
+
+```c#
+var session = new SshSession();
+
+// Socket timeout: Only set if experiencing network-level hangs
+session.Connect("example.com", 22, socketTimeout: TimeSpan.FromSeconds(30));
+
+// Session timeout: Prevent SSH operations from hanging
+session.SetSessionTimeout(TimeSpan.FromMinutes(5));
+
+session.Authenticate(credential);
+
+// Now protected at both network and SSH protocol layers
+var result = session.ExecuteCommand("some-command");
+```
+
+**When to use each:**
+- **Socket timeout**: **Only when you are facing network-level timeout problems** (e.g., extremely slow networks, network infrastructure that causes hangs at the TCP level)
+- **Session timeout**: Use for general operation timeout control (e.g., long-running commands, large file transfers)
+- **Both**: Only in production environments with known network issues
+
 ## Setting a Timeout
 
 Configure the timeout after connecting but before or after authenticating:

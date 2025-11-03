@@ -24,7 +24,7 @@ jobs:
 
     - name: Start Docker Compose services
       working-directory: ./src/NullOpsDevs.LibSsh.Test
-      run: docker compose up -d
+      run: docker compose up --build -d
       
     - name: Setup SSH Agent
       run: |

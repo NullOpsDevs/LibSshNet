@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using NullOpsDevs.LibSsh.Core;
@@ -547,10 +548,62 @@ public static class Program
         await RunTest("Command with large output", TestLargeOutput);
         await RunTest("Multiple sequential operations", TestMultipleOperations);
         await RunTest("Timeout test", TimeoutTest);
-        await RunTest("Won't connect with empty methods", WontConnectWithEmptyMethods);
+        await RunTest("Won't connect with deprecated methods", WontConnectWithDeprecatedMethods);
+        await RunTest("Parallel sessions test", ParallelSessionsTest);
     }
 
-    private static Task<bool> WontConnectWithEmptyMethods()
+    private static Task<bool> ParallelSessionsTest()
+    {
+        var sessionsToTest = 15;
+
+        if (Environment.GetEnvironmentVariable("CRAZY_LOAD_TEST") != null) 
+            sessionsToTest = 2000;
+        
+        var magic = 0L;
+        var failed = 0L;
+        var threads = new List<Thread>();
+        var runEvent = new ManualResetEventSlim(false);
+        
+        for (var i = 0; i < sessionsToTest; i++)
+        {
+            // We don't trust TPL around here.
+            var thread = new Thread(() =>
+            {
+                runEvent.Wait();
+
+                try
+                {
+                    using var session = TestHelper.CreateConnectAndAuthenticate();
+                    var result = session.ExecuteCommand("echo 10");
+
+                    if (result.Successful)
+                        Interlocked.Add(ref magic, long.Parse(result.Stdout!.Trim()));
+                } catch { Interlocked.Increment(ref failed); }
+            });
+            
+            thread.Start();
+            
+            threads.Add(thread);
+        }
+
+        var sw = new Stopwatch();
+        
+        runEvent.Set();
+        sw.Start();
+
+        while (threads.Any(t => t.IsAlive)) 
+            Thread.Sleep(1);
+        
+        sw.Stop();
+        
+        AnsiConsole.MarkupLine($"[green]  -> [/] Ran with {sessionsToTest} parallel sessions");
+        AnsiConsole.MarkupLine($"[green]  -> [/] {sw.ElapsedMilliseconds}ms");
+        AnsiConsole.MarkupLine($"[red]  -> [/] Failed threads: {failed}");
+        
+        return Task.FromResult(magic == 10 * sessionsToTest);
+    }
+
+    private static Task<bool> WontConnectWithDeprecatedMethods()
     {
         var session = new SshSession();
         session.SetMethodPreferences(SshMethod.Kex, "diffie-hellman-group1-sha1");
@@ -646,8 +699,6 @@ public static class Program
             AnsiConsole.WriteException(ex, ExceptionFormats.ShortenPaths | ExceptionFormats.ShortenTypes);
             failedTests++;
         }
-
-        await Task.Delay(1000);
     }
 
     private static void DisplaySummary()

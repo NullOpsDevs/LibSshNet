@@ -50,7 +50,10 @@ A modern, cross-platform .NET library providing managed bindings for libssh2, en
 |                         | Host key type detection                  | `SshHostKey.Type`                                    | ✅         |
 |                         | Microsoft.Extensions.Logging integration | Constructor `ILogger` parameter                      | ✅         |
 |                         | Cross-platform native binaries           | Bundled in NuGet package                             | ✅         |
-| **Thread Safety**       | `SshSession` is *NOT* thread-safe.       | -                                                    | ❌         |
+|                         | Global library cleanup                   | `LibSsh2.Exit()`                                     | ✅         |
+| **Thread Safety**       |                                          |                                                      |           |
+|                         | `SshSession` is *NOT* thread-safe.       | -                                                    | ❌         |
+|                         | Multiple `SshSession`s are supported.    | -                                                    | ✅         |
 
 
 ## Installation
