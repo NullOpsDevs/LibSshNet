@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using Microsoft.Extensions.Logging;
@@ -548,6 +548,141 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     public Task<SshCommandResult> ExecuteCommandAsync(string command, CommandExecutionOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() => ExecuteCommand(command, options, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    /// Executes a command on the remote SSH server and returns streams for stdout and stderr.
+    /// </summary>
+    /// <param name="command">The command to execute.</param>
+    /// <param name="options">Optional execution options including PTY settings. If null, uses default options.</param>
+    /// <returns>A <see cref="SshCommandStream"/> providing streaming access to stdout and stderr.</returns>
+    /// <remarks>
+    /// <para>Unlike <see cref="ExecuteCommand"/>, this method does not buffer the output in memory.
+    /// Instead, it returns streams that read directly from the SSH channel.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>The returned <see cref="SshCommandStream"/> must be disposed when you are done to release resources.</para>
+    /// <para>You should consume the <see cref="SshCommandStream.Stdout"/> and <see cref="SshCommandStream.Stderr"/> streams
+    /// before calling <see cref="SshCommandStream.WaitForExit"/> to get the exit code.</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// using var stream = session.ExecuteCommandStreaming("cat /large/file.txt");
+    /// 
+    /// // Stream stdout to a file without buffering in memory
+    /// using var file = File.Create("output.txt");
+    /// stream.Stdout.CopyTo(file);
+    /// 
+    /// // Get exit code after consuming streams
+    /// var result = stream.WaitForExit();
+    /// Console.WriteLine($"Exit code: {result.ExitCode}");
+    /// </code>
+    /// </example>
+    public unsafe SshCommandStream ExecuteCommandStreaming(string command, CommandExecutionOptions? options = null)
+    {
+        EnsureInitialized();
+        EnsureInStatus(SshConnectionStatus.LoggedIn);
+        
+        options ??= CommandExecutionOptions.Default;
+
+        logger?.LogDebug("Opening channel for streaming command execution: '{Command}'", command);
+        
+        var channel = libssh2_channel_open_ex(
+            SessionPtr,
+            StringPointers.Session,
+            7,
+            options.WindowSize,
+            options.PacketSize,
+            null,
+            0
+        );
+
+        if (channel == null)
+        {
+            logger?.LogDebug("Failed to open channel");
+            throw SshException.FromLastSessionError(SessionPtr);
+        }
+
+        logger?.LogDebug("Channel opened successfully");
+
+        try
+        {
+            // Request PTY if specified
+            if (options.RequestPty)
+            {
+                logger?.LogDebug("Requesting PTY (type: {OptionsTerminalType}, size: {OptionsTerminalWidth}x{OptionsTerminalHeight})", options.TerminalType, options.TerminalWidth, options.TerminalHeight);
+
+                var terminalType = options.TerminalType.ToLibSsh2String();
+                var terminalModes = options.TerminalModes ?? TerminalModesBuilder.Empty;
+
+                using var terminalTypeBuffer = NativeBuffer.Allocate(terminalType);
+                using var terminalModesBuffer = NativeBuffer.Allocate(terminalModes);
+
+                var ptyResult = libssh2_channel_request_pty_ex(
+                    channel,
+                    (sbyte*)terminalTypeBuffer.Pointer,
+                    (uint)terminalTypeBuffer.Length,
+                    (sbyte*)terminalModesBuffer.Pointer,
+                    (uint)terminalModesBuffer.Length,
+                    options.TerminalWidth,
+                    options.TerminalHeight,
+                    options.TerminalWidthPixels,
+                    options.TerminalHeightPixels
+                );
+
+                ptyResult.ThrowIfNotSuccessful(this, "Failed to request PTY", also: () =>
+                {
+                    libssh2_channel_free(channel);
+                });
+
+                logger?.LogDebug("PTY requested successfully");
+            }
+
+            logger?.LogDebug("Starting command process execution");
+            using var commandBytes = NativeBuffer.Allocate(command);
+
+            var processStartupResult = libssh2_channel_process_startup(
+                channel,
+                StringPointers.Exec,
+                4,
+                (sbyte*)commandBytes.Pointer,
+                (uint)commandBytes.Length
+            );
+
+            processStartupResult.ThrowIfNotSuccessful(this, "Unable to execute command", also: () =>
+            {
+                libssh2_channel_free(channel);
+            });
+
+            logger?.LogDebug("Command process started, returning streams");
+            
+            // Transfer ownership of the channel to SshCommandStream
+            return new SshCommandStream(channel);
+        }
+        catch
+        {
+            // If anything goes wrong after opening the channel, clean it up
+            libssh2_channel_free(channel);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously executes a command on the remote SSH server and returns streams for stdout and stderr.
+    /// </summary>
+    /// <param name="command">The command to execute.</param>
+    /// <param name="options">Optional execution options including PTY settings. If null, uses default options.</param>
+    /// <param name="cancellationToken">Optional cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation, containing a <see cref="SshCommandStream"/> providing streaming access to stdout and stderr.</returns>
+    /// <remarks>
+    /// <para>This method offloads the blocking channel setup to a thread pool thread.</para>
+    /// <para>Unlike <see cref="ExecuteCommandAsync"/>, this method does not buffer the output in memory.
+    /// Instead, it returns streams that read directly from the SSH channel.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// <para>The returned <see cref="SshCommandStream"/> must be disposed when you are done to release resources.</para>
+    /// </remarks>
+    public Task<SshCommandStream> ExecuteCommandStreamingAsync(string command, CommandExecutionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() => ExecuteCommandStreaming(command, options), cancellationToken);
     }
 
     /// <summary>

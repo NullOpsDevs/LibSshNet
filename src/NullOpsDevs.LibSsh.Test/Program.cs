@@ -222,6 +222,12 @@ public static class Program
         await RunTest("Command with PTY (Xterm256Color)", TestCommandWithXterm256);
         await RunTest("Command with custom terminal modes", TestCommandWithCustomModes);
         await RunTest("Command with cancellation", TestCommandCancellation);
+        await RunTest("Streaming command stdout", TestStreamingCommandStdout);
+        await RunTest("Streaming command stderr", TestStreamingCommandStderr);
+        await RunTest("Streaming command to file", TestStreamingCommandToFile);
+        await RunTest("Streaming command exit code", TestStreamingCommandExitCode);
+        await RunTest("Streaming async command", TestStreamingCommandAsync);
+        await RunTest("Streaming incremental output", TestStreamingIncrementalOutput);
     }
 
     private static Task<bool> TestSimpleCommand()
@@ -298,6 +304,200 @@ public static class Program
         {
             return Task.FromResult(true);
         }
+    }
+
+    private static Task<bool> TestStreamingCommandStdout()
+    {
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        using var stream = session.ExecuteCommandStreaming("echo 'Streaming test output'");
+        
+        using var reader = new StreamReader(stream.Stdout);
+        var output = reader.ReadToEnd();
+        
+        var result = stream.WaitForExit();
+        return Task.FromResult(result.Successful && output.Contains("Streaming test output") && result.ExitCode == 0);
+    }
+
+    private static Task<bool> TestStreamingCommandStderr()
+    {
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        using var stream = session.ExecuteCommandStreaming("ls /nonexistent >&2");
+        
+        using var stdoutReader = new StreamReader(stream.Stdout);
+        using var stderrReader = new StreamReader(stream.Stderr);
+        
+        var stdout = stdoutReader.ReadToEnd();
+        var stderr = stderrReader.ReadToEnd();
+        
+        var result = stream.WaitForExit();
+        return Task.FromResult(stderr.Length > 0 && result.ExitCode != 0);
+    }
+
+    private static Task<bool> TestStreamingCommandToFile()
+    {
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        using var stream = session.ExecuteCommandStreaming("cat /test-files/large.dat | head -c 100000");
+        
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            using (var fileStream = File.Create(tempFile))
+            {
+                stream.Stdout.CopyTo(fileStream);
+            }
+            
+            var result = stream.WaitForExit();
+            var fileInfo = new FileInfo(tempFile);
+            
+            return Task.FromResult(result.Successful && fileInfo.Length > 1000);
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
+    private static Task<bool> TestStreamingCommandExitCode()
+    {
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        using var stream = session.ExecuteCommandStreaming("exit 42");
+        
+        // Drain the streams (even though they're empty)
+        using var stdoutReader = new StreamReader(stream.Stdout);
+        stdoutReader.ReadToEnd();
+        
+        var result = stream.WaitForExit();
+        return Task.FromResult(result.ExitCode == 42);
+    }
+
+    private static async Task<bool> TestStreamingCommandAsync()
+    {
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        using var stream = await session.ExecuteCommandStreamingAsync("echo 'Async streaming test'");
+        
+        using var reader = new StreamReader(stream.Stdout);
+        var output = await reader.ReadToEndAsync();
+        
+        var result = stream.WaitForExit();
+        return result.Successful && output.Contains("Async streaming test");
+    }
+
+    private static async Task<bool> TestStreamingIncrementalOutput()
+    {
+        AnsiConsole.MarkupLine("[dim]       Starting incremental streaming test...[/]");
+        
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        AnsiConsole.MarkupLine("[dim]       Session authenticated, executing streaming command...[/]");
+        
+        using var stream = await session.ExecuteCommandStreamingAsync("echo 1; sleep 1; echo 2; sleep 1; echo 3; sleep 1;");
+        AnsiConsole.MarkupLine("[dim]       Command started, reading stdout stream...[/]");
+        
+        var lines = new List<(string Line, TimeSpan Elapsed)>();
+        var stopwatch = Stopwatch.StartNew();
+        var buffer = new byte[1024];
+        var lineBuffer = new StringBuilder();
+        
+        // Use a timeout to prevent hanging
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        
+        try
+        {
+            var readCount = 0;
+            while (true)
+            {
+                var bytesRead = await stream.Stdout.ReadAsync(buffer, cts.Token);
+                readCount++;
+                
+                if (bytesRead == 0)
+                {
+                    AnsiConsole.MarkupLine($"[dim]       Read #{readCount}: EOF reached at {stopwatch.ElapsedMilliseconds}ms[/]");
+                    break;
+                }
+                
+                var text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                var escapedText = Markup.Escape(text.Replace("\n", "\\n").Replace("\r", "\\r"));
+                AnsiConsole.MarkupLine($"[dim]       Read #{readCount}: {bytesRead} bytes at {stopwatch.ElapsedMilliseconds}ms: \"{escapedText}\"[/]");
+                
+                lineBuffer.Append(text);
+                
+                // Check for complete lines
+                var content = lineBuffer.ToString();
+                var lastNewline = content.LastIndexOf('\n');
+                if (lastNewline >= 0)
+                {
+                    var completeLines = content[..(lastNewline + 1)];
+                    lineBuffer.Clear();
+                    lineBuffer.Append(content[(lastNewline + 1)..]);
+                    
+                    foreach (var line in completeLines.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var trimmedLine = line.Trim();
+                        lines.Add((trimmedLine, stopwatch.Elapsed));
+                        AnsiConsole.MarkupLine($"[blue]       Line received: \"{Markup.Escape(trimmedLine)}\" at {stopwatch.ElapsedMilliseconds}ms[/]");
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            AnsiConsole.MarkupLine("[red]       TIMEOUT: Test timed out after 15 seconds[/]");
+            return false;
+        }
+        
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[dim]       Stream reading complete. Total time: {stopwatch.ElapsedMilliseconds}ms[/]");
+        
+        var result = stream.WaitForExit();
+        AnsiConsole.MarkupLine($"[dim]       Command exited with code: {result.ExitCode}[/]");
+        
+        // Verify we got all 3 lines
+        if (lines.Count != 3)
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Expected 3 lines, got {lines.Count}[/]");
+            return false;
+        }
+        
+        // Verify the content
+        if (lines[0].Line != "1" || lines[1].Line != "2" || lines[2].Line != "3")
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Unexpected content. Got: {string.Join(", ", lines.Select(l => $"\"{l.Line}\""))}[/]");
+            return false;
+        }
+        
+        // Verify timing: each line should appear ~1 second apart (with some tolerance)
+        var timeBetween1And2 = lines[1].Elapsed - lines[0].Elapsed;
+        var timeBetween2And3 = lines[2].Elapsed - lines[1].Elapsed;
+        
+        AnsiConsole.MarkupLine($"[dim]       Gap between line 1 and 2: {timeBetween1And2.TotalMilliseconds:F0}ms[/]");
+        AnsiConsole.MarkupLine($"[dim]       Gap between line 2 and 3: {timeBetween2And3.TotalMilliseconds:F0}ms[/]");
+        
+        // Allow 500ms-2000ms between lines (accounting for network latency and timing variations)
+        var minGap = TimeSpan.FromMilliseconds(500);
+        var maxGap = TimeSpan.FromMilliseconds(2000);
+        
+        if (timeBetween1And2 < minGap || timeBetween1And2 > maxGap)
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Gap between line 1-2 ({timeBetween1And2.TotalMilliseconds:F0}ms) outside expected range {minGap.TotalMilliseconds}-{maxGap.TotalMilliseconds}ms[/]");
+            return false;
+        }
+        
+        if (timeBetween2And3 < minGap || timeBetween2And3 > maxGap)
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Gap between line 2-3 ({timeBetween2And3.TotalMilliseconds:F0}ms) outside expected range {minGap.TotalMilliseconds}-{maxGap.TotalMilliseconds}ms[/]");
+            return false;
+        }
+        
+        // Total time should be around 3+ seconds
+        if (stopwatch.Elapsed < TimeSpan.FromSeconds(2.5))
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Total time ({stopwatch.ElapsedMilliseconds}ms) too short, expected at least 2500ms[/]");
+            return false;
+        }
+        
+        AnsiConsole.MarkupLine($"[green]  -> [/] Line timings: {lines[0].Elapsed.TotalMilliseconds:F0}ms, {lines[1].Elapsed.TotalMilliseconds:F0}ms, {lines[2].Elapsed.TotalMilliseconds:F0}ms");
+        AnsiConsole.MarkupLine($"[green]  -> [/] Gaps: {timeBetween1And2.TotalMilliseconds:F0}ms, {timeBetween2And3.TotalMilliseconds:F0}ms | Total: {stopwatch.ElapsedMilliseconds}ms");
+        
+        return result.ExitCode == 0;
     }
 
     #endregion
