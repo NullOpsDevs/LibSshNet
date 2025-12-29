@@ -233,6 +233,164 @@ catch (OperationCanceledException)
 }
 ```
 
+## Streaming Command Execution
+
+For commands that produce large amounts of output or when you need to process output as it arrives, use streaming execution. Unlike standard command execution which buffers all output in memory, streaming provides direct access to stdout and stderr streams.
+
+### Basic Streaming
+
+```c#
+using NullOpsDevs.LibSsh;
+using NullOpsDevs.LibSsh.Core;
+using NullOpsDevs.LibSsh.Credentials;
+
+var session = new SshSession();
+session.Connect("example.com", 22);
+session.Authenticate(SshCredential.FromPassword("user", "password"));
+
+// Execute command with streaming output
+using var stream = session.ExecuteCommandStreaming("cat /var/log/syslog");
+
+// Read stdout as a stream
+using var reader = new StreamReader(stream.Stdout);
+while (!reader.EndOfStream)
+{
+    var line = reader.ReadLine();
+    Console.WriteLine(line);
+}
+
+// Get exit code after consuming the streams
+var result = stream.WaitForExit();
+Console.WriteLine($"Exit code: {result.ExitCode}");
+```
+
+### Stream Output Directly to a File
+
+Streaming is ideal for downloading large command output without buffering in memory:
+
+```c#
+using var stream = session.ExecuteCommandStreaming("mysqldump database_name");
+
+// Stream directly to a file
+using var file = File.Create("backup.sql");
+stream.Stdout.CopyTo(file);
+
+var result = stream.WaitForExit();
+if (result.ExitCode != 0)
+{
+    Console.WriteLine("Backup failed!");
+}
+```
+
+### Reading Both Stdout and Stderr
+
+Access both output streams separately:
+
+```c#
+using var stream = session.ExecuteCommandStreaming("./build.sh");
+
+// Read both streams
+using var stdoutReader = new StreamReader(stream.Stdout);
+using var stderrReader = new StreamReader(stream.Stderr);
+
+var stdout = stdoutReader.ReadToEnd();
+var stderr = stderrReader.ReadToEnd();
+
+var result = stream.WaitForExit();
+
+Console.WriteLine("Output:");
+Console.WriteLine(stdout);
+
+if (!string.IsNullOrEmpty(stderr))
+{
+    Console.WriteLine("Errors:");
+    Console.WriteLine(stderr);
+}
+```
+
+### Async Streaming
+
+For non-blocking streaming operations:
+
+```c#
+using var stream = await session.ExecuteCommandStreamingAsync("tail -f /var/log/app.log",
+    cancellationToken: cancellationToken);
+
+using var reader = new StreamReader(stream.Stdout);
+
+// Process lines as they arrive
+while (!reader.EndOfStream)
+{
+    var line = await reader.ReadLineAsync();
+    ProcessLogLine(line);
+}
+```
+
+### Processing Incremental Output
+
+For commands that produce output over time (like progress indicators), read incrementally:
+
+```c#
+using var stream = session.ExecuteCommandStreaming("./slow-process.sh");
+
+var buffer = new byte[4096];
+int bytesRead;
+
+while ((bytesRead = stream.Stdout.Read(buffer, 0, buffer.Length)) > 0)
+{
+    var text = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+    Console.Write(text);  // Output as it arrives
+}
+
+var result = stream.WaitForExit();
+```
+
+### Streaming with PTY
+
+Combine streaming with PTY for commands that require terminal features:
+
+```c#
+var options = new CommandExecutionOptions
+{
+    RequestPty = true,
+    TerminalType = TerminalType.Xterm256Color
+};
+
+using var stream = session.ExecuteCommandStreaming("htop -n 1", options);
+
+using var reader = new StreamReader(stream.Stdout);
+var output = reader.ReadToEnd();
+Console.WriteLine(output);  // Contains ANSI color codes
+
+stream.WaitForExit();
+```
+
+### Important Usage Notes
+
+1. **Consume streams before getting exit code**: Always read from `Stdout` and `Stderr` before calling `WaitForExit()`. The streams must be consumed to allow the command to complete.
+
+2. **Dispose the stream**: The `SshCommandStream` owns the underlying SSH channel. Always dispose it when done:
+   ```c#
+   using var stream = session.ExecuteCommandStreaming("command");
+   // ... use streams ...
+   ```
+
+3. **Streams are read-only**: The `Stdout` and `Stderr` properties return read-only streams. You cannot write to them.
+
+4. **WaitForExit can only be called once**: After calling `WaitForExit()`, the streams are no longer readable.
+
+### When to Use Streaming vs. Standard Execution
+
+| Scenario | Use |
+|----------|-----|
+| Small command output (< 1MB) | `ExecuteCommand()` |
+| Large file downloads via command | `ExecuteCommandStreaming()` |
+| Real-time log monitoring | `ExecuteCommandStreaming()` |
+| Simple scripts and automation | `ExecuteCommand()` |
+| Processing output incrementally | `ExecuteCommandStreaming()` |
+| Commands with predictable output | `ExecuteCommand()` |
+| Memory-constrained environments | `ExecuteCommandStreaming()` |
+
 ## Advanced: Channel Settings
 
 For fine-tuning performance, adjust channel settings:
@@ -363,10 +521,13 @@ finally
 
 ## See Also
 
-- `SshSession.ExecuteCommand()` (SshSession.cs:401) - Execute commands synchronously
-- `SshSession.ExecuteCommandAsync()` (SshSession.cs:536) - Execute commands asynchronously
-- `CommandExecutionOptions` (CommandExecutionOptions.cs:11) - Configure command execution
-- `SshCommandResult` (SshCommandResult.cs:6) - Command execution results
+- `SshSession.ExecuteCommand()` - Execute commands synchronously
+- `SshSession.ExecuteCommandAsync()` - Execute commands asynchronously
+- `SshSession.ExecuteCommandStreaming()` - Execute commands with streaming output
+- `SshSession.ExecuteCommandStreamingAsync()` - Execute commands with streaming output asynchronously
+- `SshCommandStream` - Streaming command result with stdout/stderr streams
+- `CommandExecutionOptions` - Configure command execution
+- `SshCommandResult` - Command execution results
 - [Authentication](authentication.md) - Authenticate before executing commands
 - [Advanced Terminal Control](advanced-terminal-control.md) - Configure terminal modes for PTY
 - [Session Timeouts](session-timeouts.md) - Set timeouts for long-running commands

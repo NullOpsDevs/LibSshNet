@@ -75,7 +75,10 @@ The test suite includes the following categories:
 - Command with exit codes
 - Command with stderr output
 - Commands with PTY allocation
-- Long-running commands
+- Streaming command stdout/stderr
+- Streaming to file
+- Async streaming
+- Incremental output streaming
 
 ### File Transfer Tests
 - SCP upload (small, medium, large files)

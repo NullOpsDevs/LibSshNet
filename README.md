@@ -36,6 +36,7 @@ A modern, cross-platform .NET library providing managed bindings for libssh2, en
 |                         | File download                            | `ReadFile`, `ReadFileAsync`                          | ✅         |
 | **Command Execution**   |                                          |                                                      |           |
 |                         | One-shot command execution               | `ExecuteCommand`, `ExecuteCommandAsync`              | ✅         |
+|                         | Streaming command execution              | `ExecuteCommandStreaming`, `ExecuteCommandStreamingAsync` | ✅         |
 |                         | Exit code retrieval                      | `SshCommandResult.ExitCode`                          | ✅         |
 |                         | Exit signal retrieval                    | `SshCommandResult.ExitSignal`                        | ✅         |
 |                         | stdout/stderr separation                 | `SshCommandResult.Stdout`, `SshCommandResult.Stderr` | ✅         |
