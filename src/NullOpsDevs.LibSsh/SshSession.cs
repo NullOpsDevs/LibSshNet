@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,12 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
     internal unsafe _LIBSSH2_SESSION* SessionPtr { get; private set; }
     
     private readonly Dictionary<SshMethod, string> methodPreferences = new();
+
+#if NET5_0_OR_GREATER
+    // Trace handler support - maps session pointers to handlers
+    private static readonly Dictionary<nint, Action<string>> TraceHandlers = new();
+    private static readonly object TraceHandlersLock = new();
+#endif
 
     private void EnsureInitialized()
     {
@@ -904,6 +911,69 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         return Task.Run(() => Authenticate(credential), cancellationToken);
     }
 
+#if NET5_0_OR_GREATER
+    /// <summary>
+    /// Sets the trace level bitmask and handler for libssh2 debugging output.
+    /// </summary>
+    /// <param name="traceLevel">A combination of <see cref="SshTraceLevel"/> flags indicating which categories to trace.</param>
+    /// <param name="handler">A callback function that receives trace messages. Pass null to disable tracing.</param>
+    /// <remarks>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status.</para>
+    /// <para>This method is only available on .NET 5.0 or later.</para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// session.SetTrace(SshTraceLevel.Authentication | SshTraceLevel.Error,
+    ///     message => Console.WriteLine($"[SSH] {message}"));
+    /// </code>
+    /// </example>
+    public unsafe void SetTrace(SshTraceLevel traceLevel, Action<string>? handler)
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+
+        var sessionKey = (nint)SessionPtr;
+
+        lock (TraceHandlersLock)
+        {
+            if (handler == null || traceLevel == SshTraceLevel.None)
+            {
+                TraceHandlers.Remove(sessionKey);
+                libssh2_trace(SessionPtr, 0);
+                libssh2_trace_sethandler(SessionPtr, null, null);
+            }
+            else
+            {
+                TraceHandlers[sessionKey] = handler;
+                libssh2_trace(SessionPtr, (int)traceLevel);
+                libssh2_trace_sethandler(SessionPtr, (void*)sessionKey, &NativeTraceCallback);
+            }
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void NativeTraceCallback(_LIBSSH2_SESSION* session, void* context, sbyte* message, nuint length)
+    {
+        Action<string>? handler;
+        lock (TraceHandlersLock)
+        {
+            TraceHandlers.TryGetValue((nint)context, out handler);
+        }
+
+        if (handler == null) return;
+
+        try
+        {
+            var msg = length > 0 ? Marshal.PtrToStringUTF8((IntPtr)message, (int)length) : string.Empty;
+            handler(msg ?? string.Empty);
+        }
+        catch
+        {
+            // Swallow exceptions to prevent crashes in native code
+        }
+    }
+#endif
+
     /// <summary>
     /// Gets the last error message from the libssh2 session (for debugging).
     /// </summary>
@@ -930,6 +1000,14 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
 
         if (SessionPtr != null)
         {
+#if NET5_0_OR_GREATER
+            // Clean up trace handler
+            lock (TraceHandlersLock)
+            {
+                TraceHandlers.Remove((nint)SessionPtr);
+            }
+#endif
+
             _ = libssh2_session_disconnect_ex(SessionPtr, SSH_DISCONNECT_BY_APPLICATION, StringPointers.SessionDisposed, null);
             _ = libssh2_session_free(SessionPtr);
             SessionPtr = null;

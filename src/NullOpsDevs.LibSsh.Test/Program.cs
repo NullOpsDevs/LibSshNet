@@ -228,6 +228,7 @@ public static class Program
         await RunTest("Streaming command exit code", TestStreamingCommandExitCode);
         await RunTest("Streaming async command", TestStreamingCommandAsync);
         await RunTest("Streaming incremental output", TestStreamingIncrementalOutput);
+        await RunTest("Streaming long output (2 min wait)", TestStreamingLongOutputWithTimeout);
     }
 
     private static Task<bool> TestSimpleCommand()
@@ -500,6 +501,77 @@ public static class Program
         return result.ExitCode == 0;
     }
 
+    private static async Task<bool> TestStreamingLongOutputWithTimeout()
+    {
+        // This is an optional long-running test, skip unless explicitly enabled
+        if (Environment.GetEnvironmentVariable("LONG_RUNNING_STREAM_TEST") == null)
+        {
+            AnsiConsole.MarkupLine("[yellow]       Skipped (set LONG_RUNNING_STREAM_TEST=1 to enable)[/]");
+            skippedTests++;
+            return true;
+        }
+
+        AnsiConsole.MarkupLine("[dim]       Starting long output streaming test (2 min timeout)...[/]");
+
+        using var session = TestHelper.CreateConnectAndAuthenticate();
+        AnsiConsole.MarkupLine("[dim]       Session authenticated, executing streaming command...[/]");
+
+        // Execute a command that produces output over 2 minutes (24 lines, 5 seconds apart)
+        using var stream = await session.ExecuteCommandStreamingAsync(
+            "for i in $(seq 1 24); do echo \"Line $i at $(date +%H:%M:%S)\"; sleep 5; done");
+        AnsiConsole.MarkupLine("[dim]       Command started, reading stdout with StreamReader (~2 min output, 3 min timeout)...[/]");
+
+        var lines = new List<string>();
+        var stopwatch = Stopwatch.StartNew();
+
+        using var reader = new StreamReader(stream.Stdout);
+        var lineNum = 0;
+
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            lineNum++;
+            lines.Add(line);
+            var escapedLine = Markup.Escape(line);
+            if (escapedLine.Length > 60) escapedLine = escapedLine[..57] + "...";
+            AnsiConsole.MarkupLine($"[dim]       Line #{lineNum}: \"{escapedLine}\" at {stopwatch.ElapsedMilliseconds}ms[/]");
+        }
+
+        stopwatch.Stop();
+        AnsiConsole.MarkupLine($"[dim]       Stream reading complete. Total lines: {lines.Count}, Total time: {stopwatch.ElapsedMilliseconds}ms[/]");
+
+        var result = stream.WaitForExit();
+        AnsiConsole.MarkupLine($"[dim]       Command exited with code: {result.ExitCode}[/]");
+
+        // Verify we received all 24 lines
+        if (lines.Count != 24)
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Expected 24 lines, got {lines.Count}[/]");
+            return false;
+        }
+
+        // Verify the content contains expected line markers
+        for (int i = 1; i <= 24; i++)
+        {
+            if (!lines.Any(l => l.Contains($"Line {i} at")))
+            {
+                AnsiConsole.MarkupLine($"[red]       FAILED: Missing 'Line {i}' in output[/]");
+                return false;
+            }
+        }
+
+        // Verify timing: total time should be at least 115 seconds (24 lines with 5 second delay each = ~120s)
+        if (stopwatch.Elapsed < TimeSpan.FromSeconds(115))
+        {
+            AnsiConsole.MarkupLine($"[red]       FAILED: Total time ({stopwatch.ElapsedMilliseconds}ms) too short, expected at least 115000ms[/]");
+            return false;
+        }
+
+        AnsiConsole.MarkupLine($"[green]  -> [/] Received {lines.Count} lines in {stopwatch.Elapsed.TotalSeconds:F1}s (~2 min)");
+        AnsiConsole.MarkupLine($"[green]  -> [/] All output received successfully");
+
+        return result.ExitCode == 0;
+    }
+
     #endregion
 
     #region File Transfer Tests
@@ -756,6 +828,7 @@ public static class Program
         await RunTest("Timeout test", TimeoutTest);
         await RunTest("Won't connect with deprecated methods", WontConnectWithDeprecatedMethods);
         await RunTest("Parallel sessions test", ParallelSessionsTest);
+        await RunTest("Trace handler test", TestTraceHandler);
     }
 
     private static Task<bool> ParallelSessionsTest()
@@ -875,6 +948,62 @@ public static class Program
             if (!result.Successful || !result.Stdout?.Contains($"Test {i}") == true)
                 return Task.FromResult(false);
         }
+
+        return Task.FromResult(true);
+    }
+
+    private static Task<bool> TestTraceHandler()
+    {
+        var traceMessages = new List<string>();
+
+        using var session = TestHelper.CreateAndConnect();
+
+        // Enable tracing with our handler
+        session.SetTrace(
+            SshTraceLevel.Authentication | SshTraceLevel.Error | SshTraceLevel.KeyExchange,
+            message => traceMessages.Add(message));
+
+        // Authenticate - this should generate trace messages
+        var credential = SshCredential.FromPassword(TestConfig.Username, TestConfig.Password);
+        var authResult = session.Authenticate(credential);
+
+        if (!authResult)
+        {
+            AnsiConsole.MarkupLine("[red]       Authentication failed[/]");
+            return Task.FromResult(false);
+        }
+
+        // Run a simple command
+        var result = session.ExecuteCommand("echo 'trace test'");
+
+        if (!result.Successful)
+        {
+            AnsiConsole.MarkupLine("[red]       Command execution failed[/]");
+            return Task.FromResult(false);
+        }
+
+        // Disable tracing
+        session.SetTrace(SshTraceLevel.None, null);
+
+        AnsiConsole.MarkupLine($"[green]  -> [/] Captured {traceMessages.Count} trace messages");
+
+        // We should have received some trace messages during auth
+        if (traceMessages.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[red]       No trace messages received[/]");
+            return Task.FromResult(false);
+        }
+
+        // Print first few trace messages for debugging
+        foreach (var msg in traceMessages.Take(5))
+        {
+            var escaped = Markup.Escape(msg.Trim());
+            if (escaped.Length > 70) escaped = escaped[..67] + "...";
+            AnsiConsole.MarkupLine($"[dim]       {escaped}[/]");
+        }
+
+        if (traceMessages.Count > 5)
+            AnsiConsole.MarkupLine($"[dim]       ... and {traceMessages.Count - 5} more[/]");
 
         return Task.FromResult(true);
     }
