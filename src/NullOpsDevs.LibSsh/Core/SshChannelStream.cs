@@ -78,34 +78,44 @@ internal sealed unsafe class SshChannelStream : Stream
         // Pin the managed buffer and read directly into it
         fixed (byte* bufferPtr = buffer)
         {
-            var bytesRead = LibSshNative.libssh2_channel_read_ex(
-                _channel,
-                _streamId,
-                (sbyte*)bufferPtr,
-                (nuint)buffer.Length);
-
-            if (bytesRead < 0)
+            while (true)
             {
-                // Check for read timeout explicitly
-                if (bytesRead == LibSshNative.LIBSSH2_ERROR_TIMEOUT)
+                var bytesRead = LibSshNative.libssh2_channel_read_ex(
+                    _channel,
+                    _streamId,
+                    (sbyte*)bufferPtr,
+                    (nuint)buffer.Length);
+
+                // Success - got data
+                if (bytesRead > 0)
+                    return (int)bytesRead;
+
+                // Clean EOF
+                if (bytesRead == 0)
                 {
-                    throw new SshException(
-                        "SSH channel read timed out. Consider calling DisableReadTimeout() or increasing the timeout with SetReadTimeout().",
-                        SshError.Timeout);
+                    _isEof = true;
+                    return 0;
                 }
 
-                // Other errors - treat as EOF for stream purposes
+                // TIMEOUT in blocking mode - check if channel actually has EOF
+                if (bytesRead == LibSshNative.LIBSSH2_ERROR_TIMEOUT)
+                {
+                    // Check if the remote end has signaled EOF
+                    if (LibSshNative.libssh2_channel_eof(_channel) == 1)
+                    {
+                        _isEof = true;
+                        return 0;
+                    }
+
+                    // No EOF yet - libssh2 is just being dumb, wait and retry
+                    Thread.Sleep(300);
+                    continue;
+                }
+
+                // Actual error - treat as EOF
                 _isEof = true;
                 return 0;
             }
-
-            if (bytesRead == 0)
-            {
-                _isEof = true;
-                return 0;
-            }
-
-            return (int)bytesRead;
         }
     }
 
