@@ -284,6 +284,24 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         
         libssh2_session_set_timeout(SessionPtr, 0);
     }
+    
+    /// <summary>
+    /// Disables the read timeout, allowing read operations to wait indefinitely for data.
+    /// </summary>
+    /// <remarks>
+    /// <para>By default, libssh2 has no read timeout. Use this method to explicitly disable any previously set read timeout.</para>
+    /// <para>The read timeout controls how long channel read operations (like reading command output) will wait for data before returning LIBSSH2_ERROR_TIMEOUT (-9).</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// </remarks>
+    /// <seealso cref="SetReadTimeout"/>
+    /// <seealso cref="DisableSessionTimeout"/>
+    public unsafe void DisableReadTimeout()
+    {
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+
+        libssh2_session_set_read_timeout(SessionPtr, 0);
+    }
 
     /// <summary>
     /// Sets the maximum time to wait for SSH operations to complete.
@@ -306,6 +324,33 @@ public sealed class SshSession(ILogger? logger = null) : IDisposable
         EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
         
         libssh2_session_set_timeout(SessionPtr, (int) timeout.TotalMilliseconds);
+    }
+    
+    /// <summary>
+    /// Sets the maximum time to wait for data when reading from SSH channels.
+    /// </summary>
+    /// <param name="timeout">The timeout duration. Must be greater than zero and less than <see cref="int.MaxValue"/> milliseconds.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if the timeout is negative or exceeds the maximum allowed value.</exception>
+    /// <remarks>
+    /// <para>This timeout applies specifically to channel read operations (e.g., reading command output via streaming).</para>
+    /// <para>If no data is received within the specified time, the read operation will return LIBSSH2_ERROR_TIMEOUT (-9).</para>
+    /// <para>This is separate from <see cref="SetSessionTimeout"/> which controls the overall session timeout.</para>
+    /// <para>The session must be in <see cref="SshConnectionStatus.Connected"/> or <see cref="SshConnectionStatus.LoggedIn"/> status before calling this method.</para>
+    /// </remarks>
+    /// <seealso cref="DisableReadTimeout"/>
+    /// <seealso cref="SetSessionTimeout"/>
+    public unsafe void SetReadTimeout(TimeSpan timeout)
+    {
+        if (timeout < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout must be greater than zero");
+
+        if (timeout.TotalMilliseconds > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "Timeout cannot be greater than int.MaxValue milliseconds");
+
+        EnsureInitialized();
+        EnsureInStatuses(SshConnectionStatus.Connected, SshConnectionStatus.LoggedIn);
+
+        libssh2_session_set_read_timeout(SessionPtr, (int)timeout.TotalMilliseconds);
     }
 
     /// <summary>

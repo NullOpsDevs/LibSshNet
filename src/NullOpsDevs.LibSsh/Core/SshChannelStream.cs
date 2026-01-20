@@ -1,3 +1,4 @@
+using NullOpsDevs.LibSsh.Exceptions;
 using NullOpsDevs.LibSsh.Generated;
 
 namespace NullOpsDevs.LibSsh.Core;
@@ -85,8 +86,15 @@ internal sealed unsafe class SshChannelStream : Stream
 
             if (bytesRead < 0)
             {
-                // Error occurred - treat as EOF for stream purposes
-                // The actual error can be retrieved via the session
+                // Check for read timeout explicitly
+                if (bytesRead == LibSshNative.LIBSSH2_ERROR_TIMEOUT)
+                {
+                    throw new SshException(
+                        "SSH channel read timed out. Consider calling DisableReadTimeout() or increasing the timeout with SetReadTimeout().",
+                        SshError.Timeout);
+                }
+
+                // Other errors - treat as EOF for stream purposes
                 _isEof = true;
                 return 0;
             }
