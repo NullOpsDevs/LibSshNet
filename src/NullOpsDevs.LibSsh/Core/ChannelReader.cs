@@ -81,6 +81,20 @@ internal static class ChannelReader
             {
                 break;
             }
+            else if (bytesRead == LibSshNative.LIBSSH2_ERROR_TIMEOUT)
+            {
+                // Timeout in blocking mode - check if channel actually has EOF
+                if (LibSshNative.libssh2_channel_eof(channel) == 1)
+                    break;
+
+                // No EOF yet - wait and retry
+                Thread.Sleep(300);
+            }
+            // Other errors - stop reading
+            else
+            {
+                break;
+            }
         }
 
         return totalBytesRead;
